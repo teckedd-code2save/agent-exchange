@@ -11,10 +11,12 @@
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "db:migrate": "pnpm --filter @agent-exchange/db migrate:dev",
     "db:generate": "pnpm --filter @agent-exchange/db generate",
-    "db:studio": "pnpm --filter @agent-exchange/db studio"
+    "db:studio": "pnpm --filter @agent-exchange/db studio",
+    "test:payment": "tsx scripts/test-payment-flow.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
