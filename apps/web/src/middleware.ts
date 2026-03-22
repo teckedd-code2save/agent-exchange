@@ -1,15 +1,15 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-// Rate limiting via cache is handled inside API route handlers (not Edge middleware)
-// to avoid Edge runtime constraints. This middleware handles:
-// 1. Public route pass-through
-// 2. Dashboard auth redirect
-
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Dashboard routes require auth — redirect to login if no session cookie
-  if (pathname.startsWith('/dashboard')) {
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) {
+    // Allow bypass in local dev via AUTH_BYPASS env
+    if (process.env['AUTH_BYPASS'] === 'true') {
+      return NextResponse.next();
+    }
+
     const hasSession =
       req.cookies.has('sb-access-token') ||
       req.cookies.has('supabase-auth-token') ||
@@ -26,5 +26,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  matcher: ['/dashboard/:path*', '/admin/:path*'],
 };
