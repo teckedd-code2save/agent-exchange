@@ -13,544 +13,176 @@ datasource db {
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-enum OrgTier {
-  free
-  verified
-  featured
-  proprietary_data
-}
-
-enum OrgStatus {
-  active
-  suspended
-  pending_review
-}
-
-enum OrgMemberRole {
-  owner
-  admin
-  viewer
-}
-
-enum RegistrationType {
-  self_serve
-  curated
-  gateway_wrapped
-}
-
-enum ListingTier {
-  free
-  verified
-  featured
-  proprietary_data
-}
-
-enum ServiceStatus {
+enum Status {
   draft
-  active
-  suspended
-  deprecated
+  sandbox
+  testnet
+  live
+  paused
 }
 
-enum DataClassification {
-  public
-  licensed
-  proprietary
-  restricted
+enum PricingType {
+  fixed
+  per_token
+  per_second
 }
 
-enum AgentProtocol {
-  mpp
-  mcp
-  openapi
-  a2a
-  acp
-  custom
-}
-
-enum HttpMethod {
-  GET
-  POST
-  PUT
-  PATCH
-  DELETE
-}
-
-enum RestrictionType {
-  allowlist
-  denylist
-}
-
-enum PaymentMethod {
+enum PaymentType {
   tempo
   stripe
   lightning
-  custom
+  sandbox // For testing without real rails
 }
 
-enum PaymentIntent {
-  charge
-  session
+enum CallerType {
+  anonymous
+  identified_agent
+  user_proxy
 }
 
-enum PricingModel {
-  flat
-  per_token
-  per_byte
-  per_second
-  tiered
+enum Environment {
+  sandbox
+  testnet
+  production
 }
 
-enum TransactionStatus {
-  pending
-  settled
-  failed
-  refunded
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+// 1. Providers (Users/Devs who own services)
+model Provider {
+  id      String  @id @default(cuid())
+  userId  String  @unique // Link to Clerk/Supabase Auth
+  name    String?
+  email   String  @unique
+  company String?
+
+  // Balances for testnet faucet
+  testnetBalance Decimal @default(0.0)
+  liveBalance    Decimal @default(0.0)
+
+  services Service[]
+  apiKeys  ApiKey[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-enum SessionStatus {
-  open
-  closed
-  expired
-  force_closed
-}
-
-enum PayoutStatus {
-  pending
-  processing
-  settled
-  failed
-}
-
-enum HealthStatus {
-  up
-  degraded
-  down
-  timeout
-}
-
-enum BreachType {
-  uptime
-  latency
-}
-
-// ─── Tables ──────────────────────────────────────────────────────────────────
-
-model Organisation {
-  id                String              @id @default(uuid())
-  name              String
-  slug              String              @unique
-  tier              OrgTier             @default(free)
-  status            OrgStatus           @default(active)
-  billingEmail      String
-  stripeCustomerId  String?             @unique
-  tempoWalletAddress String?
-  metadata          Json                @default("{}")
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  deletedAt         DateTime?
-
-  members           OrganisationMember[]
-  apiKeys           ApiKey[]
-  services          Service[]
-  accessGrants      AccessGrant[]
-  transactions      Transaction[]
-  payouts           Payout[]
-
-  @@map("organisations")
-}
-
-model OrganisationMember {
-  id             String        @id @default(uuid())
-  organisationId String
-  userId         String
-  role           OrgMemberRole @default(viewer)
-  invitedAt      DateTime      @default(now())
-  acceptedAt     DateTime?
-
-  organisation   Organisation  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-
-  @@unique([organisationId, userId])
-  @@map("organisation_members")
-}
-
-model ApiKey {
-  id             String    @id @default(uuid())
-  organisationId String
-  name           String
-  keyHash        String    @unique
-  scopes         String[]
-  lastUsedAt     DateTime?
-  expiresAt      DateTime?
-  revokedAt      DateTime?
-  createdAt      DateTime  @default(now())
-
-  organisation   Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  discoveryEvents DiscoveryEvent[]
-
-  @@map("api_keys")
-}
-
+// 2. Services (The core entity - the AI APIs)
 model Service {
-  id                 String             @id @default(uuid())
-  organisationId     String
-  name               String
-  slug               String             @unique
-  description        String
-  tagline            String?
-  serviceUrl         String
-  llmsTxtUrl         String?
-  logoUrl            String?
-  registrationType   RegistrationType   @default(self_serve)
-  listingTier        ListingTier        @default(free)
-  status             ServiceStatus      @default(draft)
-  dataClassification DataClassification @default(public)
-  healthScore        Int                @default(100)
-  verifiedAt         DateTime?
-  featuredUntil      DateTime?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  deletedAt          DateTime?
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  providerId  String
+  provider    Provider @relation(fields: [providerId], references: [id])
 
-  organisation       Organisation        @relation(fields: [organisationId], references: [id], onDelete: Restrict)
-  categories         ServiceCategory[]
-  protocols          ServiceProtocol[]
-  endpoints          ServiceEndpoint[]
-  geoRestrictions    ServiceGeoRestriction[]
-  paymentMethods     ServicePaymentMethod[]
-  accessTiers        AccessTier[]
-  transactions       Transaction[]
-  sessions           Session[]
-  healthChecks       HealthCheck[]
-  slaCommitment      SlaCommitment?
-  slaBreaches        SlaBreach[]
-  statsDaily         ServiceStatsDaily[]
+  // Routing
+  endpoint   String // The actual API URL
+  studioSlug String @unique // The mpp.studio/api/v1/slug proxy endpoint
 
-  @@map("services")
+  status Status @default(draft)
+
+  // Discovery
+  category String // "image-generation", "search", "data", etc.
+  tags     String[]
+
+  // Pricing configuration
+  pricingType   PricingType @default(fixed)
+  pricingConfig Json // { amount: "0.005", currency: "USDC" }
+
+  // MPP specific settings
+  mppChallengeEndpoint String? // Override for where to send 402s if different from endpoint
+  supportedPayments    PaymentType[]
+
+  // Denormalized analytics
+  totalCalls   Int     @default(0)
+  totalRevenue Decimal @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  calls   Call[]
+  reviews Review[]
+
+  @@index([category, status])
 }
 
-model ServiceCategory {
-  serviceId  String
-  category   String
+// 3. API Keys (For accessing the Studio Proxy and Discovery)
+model ApiKey {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  providerId  String
+  provider    Provider    @relation(fields: [providerId], references: [id])
+  environment Environment @default(sandbox)
+  name        String // "Dev key", "Prod key"
+  lastUsedAt  DateTime?
 
-  service    Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@id([serviceId, category])
-  @@map("service_categories")
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
 }
 
-model ServiceProtocol {
-  id            String        @id @default(uuid())
-  serviceId     String
-  protocol      AgentProtocol
-  specUrl       String?
-  mcpServerUrl  String?
-  openapiSpec   Json?
-  notes         String?
-
-  service       Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@unique([serviceId, protocol])
-  @@map("service_protocols")
-}
-
-model ServiceEndpoint {
-  id                 String             @id @default(uuid())
-  serviceId          String
-  path               String
-  method             HttpMethod         @default(POST)
-  name               String
-  description        String?
-  dataClassification DataClassification @default(public)
-  rateLimitRpm       Int?
-  deprecatedAt       DateTime?
-  createdAt          DateTime           @default(now())
-
-  service            Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  pricing            EndpointPricing[]
-  transactions       Transaction[]
-
-  @@unique([serviceId, path, method])
-  @@map("service_endpoints")
-}
-
-model ServiceGeoRestriction {
-  id              String          @id @default(uuid())
-  serviceId       String
-  restrictionType RestrictionType
-  regions         String[]
-  createdAt       DateTime        @default(now())
-
-  service         Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@map("service_geo_restrictions")
-}
-
-model ServicePaymentMethod {
-  id        String        @id @default(uuid())
+// 4. Calls (The transaction log / Ledger)
+model Call {
+  id        String  @id @default(cuid())
   serviceId String
-  method    PaymentMethod
-  intent    PaymentIntent @default(charge)
-  isActive  Boolean       @default(true)
-  config    Json          @default("{}")
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  service   Service @relation(fields: [serviceId], references: [id])
 
-  service   Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  pricing   EndpointPricing[]
+  // Who called (agents)
+  callerType CallerType @default(anonymous)
+  callerId   String? // If identified agent
 
-  @@unique([serviceId, method, intent])
-  @@map("service_payment_methods")
+  // The request
+  method String // GET, POST
+  path   String // The path appended to the service
+  status Int // 200, 402, 500
+
+  // Payment details
+  paymentType PaymentType
+  amount      Decimal
+  currency    String // USDC, USD, BTC
+
+  // MPP flow tracking
+  challengeIssued Boolean @default(false)
+  challengeSolved Boolean @default(false)
+  receiptVerified Boolean @default(false)
+
+  // Performance
+  latencyMs Int
+
+  // Environment tracking
+  environment Environment @default(sandbox)
+
+  createdAt DateTime @default(now())
+
+  @@index([serviceId, createdAt])
+  @@index([serviceId, status])
+  @@index([environment, createdAt])
 }
 
-model EndpointPricing {
-  id              String               @id @default(uuid())
-  endpointId      String
-  paymentMethodId String
-  pricingModel    PricingModel         @default(flat)
-  amount          Decimal              @db.Decimal(18, 8)
-  currency        String               @default("USDC")
-  unit            String?
-  minAmount       Decimal?             @db.Decimal(18, 8)
-  maxAmount       Decimal?             @db.Decimal(18, 8)
-  effectiveFrom   DateTime             @default(now())
-  effectiveUntil  DateTime?
+// 5. Reviews (Agent Attestation)
+model Review {
+  id        String  @id @default(cuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
 
-  endpoint        ServiceEndpoint      @relation(fields: [endpointId], references: [id], onDelete: Cascade)
-  paymentMethod   ServicePaymentMethod @relation(fields: [paymentMethodId], references: [id], onDelete: Cascade)
+  reviewerId String // Agent or user identifier
+  rating     Int // 1-5
+  comment    String?
+  callId     String? @unique // Optional link to specific transaction (Proof of Usage)
 
-  @@map("endpoint_pricing")
+  createdAt DateTime @default(now())
+
+  @@index([serviceId, rating])
 }
 
-model AccessTier {
-  id                 String             @id @default(uuid())
-  serviceId          String
-  name               String
-  description        String?
-  dataClassification DataClassification @default(licensed)
-  requiresApproval   Boolean            @default(false)
-  priceMonthly       Decimal?           @db.Decimal(12, 2)
-  stripePriceId      String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+// 6. Testnet Faucet Claims (Rate limiting faucet)
+model FaucetClaim {
+  id       String  @id @default(cuid())
+  walletId String // Address or identifier
+  amount   Decimal
+  currency String  @default("USDC")
+  network  String  @default("tempo-testnet")
 
-  service            Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  grants             AccessGrant[]
+  createdAt DateTime @default(now())
 
-  @@map("access_tiers")
-}
-
-model AccessGrant {
-  id            String     @id @default(uuid())
-  organisationId String
-  accessTierId  String
-  grantedAt     DateTime   @default(now())
-  expiresAt     DateTime?
-  revokedAt     DateTime?
-  grantedBy     String?
-
-  organisation  Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  accessTier    AccessTier   @relation(fields: [accessTierId], references: [id], onDelete: Restrict)
-
-  @@unique([organisationId, accessTierId])
-  @@map("access_grants")
-}
-
-model MppChallenge {
-  id            String        @id @default(uuid())
-  challengeId   String        @unique
-  endpointPath  String
-  paymentMethod PaymentMethod
-  intent        PaymentIntent
-  amount        Decimal       @db.Decimal(18, 8)
-  currency      String        @default("USDC")
-  digest        String?
-  issuedAt      DateTime      @default(now())
-  expiresAt     DateTime
-  usedAt        DateTime?
-
-  credential    MppCredential?
-
-  @@map("mpp_challenges")
-}
-
-model MppCredential {
-  id                 String        @id @default(uuid())
-  challengeId        String        @unique
-  agentWalletAddress String
-  paymentMethod      PaymentMethod
-  payloadHash        String
-  verifiedAt         DateTime      @default(now())
-  createdAt          DateTime      @default(now())
-
-  challenge          MppChallenge  @relation(fields: [challengeId], references: [challengeId])
-  receipt            MppReceipt?
-
-  @@map("mpp_credentials")
-}
-
-model MppReceipt {
-  id           String        @id @default(uuid())
-  credentialId String        @unique
-  receiptId    String        @unique
-  resourcePath String
-  amount       Decimal       @db.Decimal(18, 8)
-  currency     String
-  issuedAt     DateTime      @default(now())
-
-  credential   MppCredential @relation(fields: [credentialId], references: [id])
-
-  @@map("mpp_receipts")
-}
-
-model Transaction {
-  id                    String            @id @default(uuid())
-  organisationId        String?
-  serviceId             String
-  endpointId            String?
-  paymentMethod         PaymentMethod
-  intent                PaymentIntent
-  status                TransactionStatus @default(pending)
-  grossAmount           Decimal           @db.Decimal(18, 8)
-  exchangeFee           Decimal           @default(0) @db.Decimal(18, 8)
-  netAmount             Decimal           @db.Decimal(18, 8)
-  currency              String
-  agentWalletAddress    String?
-  stripePaymentIntentId String?           @unique
-  lightningPaymentHash  String?           @unique
-  tempoTxHash           String?           @unique
-  idempotencyKey        String            @unique
-  initiatedAt           DateTime          @default(now())
-  settledAt             DateTime?
-  failedAt              DateTime?
-  createdAt             DateTime          @default(now())
-
-  organisation          Organisation?     @relation(fields: [organisationId], references: [id], onDelete: SetNull)
-  service               Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  endpoint              ServiceEndpoint?  @relation(fields: [endpointId], references: [id], onDelete: SetNull)
-  sessions              Session[]
-
-  @@map("transactions")
-}
-
-model Session {
-  id                 String        @id @default(uuid())
-  transactionId      String?
-  serviceId          String
-  agentWalletAddress String
-  channelId          String?       @unique
-  status             SessionStatus @default(open)
-  totalAmount        Decimal       @default(0) @db.Decimal(18, 8)
-  currency           String        @default("USDC")
-  openedAt           DateTime      @default(now())
-  lastActivityAt     DateTime      @default(now())
-  closedAt           DateTime?
-
-  transaction        Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  service            Service       @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-
-  @@map("sessions")
-}
-
-model HealthCheck {
-  id           String       @id @default(uuid())
-  serviceId    String
-  checkedAt    DateTime     @default(now())
-  status       HealthStatus
-  httpStatus   Int?
-  latencyMs    Int?
-  errorMessage String?
-
-  service      Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@map("health_checks")
-}
-
-model SlaCommitment {
-  id               String      @id @default(uuid())
-  serviceId        String      @unique
-  uptimeTargetPct  Decimal     @db.Decimal(5, 2)
-  maxLatencyMs     Int?
-  supportEmail     String?
-  statusPageUrl    String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-
-  service          Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  breaches         SlaBreach[]
-
-  @@map("sla_commitments")
-}
-
-model SlaBreach {
-  id                String        @id @default(uuid())
-  serviceId         String
-  slaCommitmentId   String
-  breachType        BreachType
-  periodStart       DateTime
-  periodEnd         DateTime
-  actualValue       Decimal       @db.Decimal(10, 4)
-  targetValue       Decimal       @db.Decimal(10, 4)
-  resolvedAt        DateTime?
-  createdAt         DateTime      @default(now())
-
-  service           Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  slaCommitment     SlaCommitment @relation(fields: [slaCommitmentId], references: [id], onDelete: Cascade)
-
-  @@map("sla_breaches")
-}
-
-model DiscoveryEvent {
-  id                 String        @id @default(uuid())
-  apiKeyId           String?
-  agentWalletAddress String?
-  queryText          String?
-  filters            Json          @default("{}")
-  resultCount        Int?
-  paymentMethod      PaymentMethod?
-  amount             Decimal?      @db.Decimal(18, 8)
-  currency           String?
-  queriedAt          DateTime      @default(now())
-
-  apiKey             ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
-
-  @@map("discovery_events")
-}
-
-model ServiceStatsDaily {
-  id                   String   @id @default(uuid())
-  serviceId            String
-  date                 DateTime @db.Date
-  discoveryImpressions Int      @default(0)
-  discoveryClicks      Int      @default(0)
-  endpointCalls        Int      @default(0)
-  totalVolume          Decimal  @default(0) @db.Decimal(18, 8)
-  totalFees            Decimal  @default(0) @db.Decimal(18, 8)
-  p50LatencyMs         Int?
-  p99LatencyMs         Int?
-  uptimePct            Decimal? @db.Decimal(5, 2)
-
-  service              Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@unique([serviceId, date])
-  @@map("service_stats_daily")
-}
-
-model Payout {
-  id             String        @id @default(uuid())
-  organisationId String
-  periodStart    DateTime
-  periodEnd      DateTime
-  grossAmount    Decimal       @db.Decimal(18, 8)
-  exchangeFee    Decimal       @db.Decimal(18, 8)
-  netAmount      Decimal       @db.Decimal(18, 8)
-  currency       String
-  paymentMethod  PaymentMethod
-  status         PayoutStatus  @default(pending)
-  settledAt      DateTime?
-  createdAt      DateTime      @default(now())
-
-  organisation   Organisation  @relation(fields: [organisationId], references: [id], onDelete: Restrict)
-
-  @@map("payouts")
+  @@index([walletId, createdAt])
 }

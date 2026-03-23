@@ -1,6 +1,1 @@
-export {
-  getStripeClient,
-  constructWebhookEvent,
-  createPaymentIntent,
-  createOrRetrieveCustomer,
-} from '@agent-exchange/payments';
+// Stub — Stripe integration will be re-added for live payment verification
