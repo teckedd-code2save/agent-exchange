@@ -86,14 +86,51 @@ export async function verifyCredential(params: VerifyCredentialParams): Promise<
     challengeId,
     paymentMethod,
     agentWalletAddress,
+    proofId: proof,
   };
 }
 
-// Stubbed per-method proof verification — Phase 1 returns true
 async function verifyProof(
-  _method: string,
-  _proof: string,
+  method: string,
+  proof: string,
   _amount: string,
 ): Promise<boolean> {
-  return true;
+  if (method === 'stripe') {
+    return verifyStripeProof(proof);
+  }
+  if (method === 'tempo') {
+    // Phase 1 stub — replace with Tempo SDK when available
+    // See docs/TEMPO_BLOCKER.md
+    console.info('[mpp:verify] tempo proof stubbed for:', proof.slice(0, 16));
+    return true;
+  }
+  console.warn('[mpp:verify] unknown payment method, rejecting:', method);
+  return false;
+}
+
+async function verifyStripeProof(paymentIntentId: string): Promise<boolean> {
+  if (!process.env['STRIPE_SECRET_KEY']) {
+    console.error('[mpp:verify] STRIPE_SECRET_KEY not set');
+    return false;
+  }
+  if (!paymentIntentId.startsWith('pi_')) {
+    console.warn('[mpp:verify] invalid Stripe proof — expected pi_...');
+    return false;
+  }
+  try {
+    const { getStripeClient } = await import('@agent-exchange/payments');
+    const pi = await getStripeClient().paymentIntents.retrieve(paymentIntentId);
+    if (pi.status !== 'succeeded') {
+      console.info(`[mpp:verify] Stripe PI ${paymentIntentId} status=${pi.status}`);
+      return false;
+    }
+    if (pi.metadata['agentExchange'] !== 'true') {
+      console.warn('[mpp:verify] Stripe PI missing agentExchange metadata — possible forgery');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[mpp:verify] Stripe error:', err);
+    return false;
+  }
 }

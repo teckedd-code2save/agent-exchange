@@ -50,6 +50,9 @@ importers:
       '@agent-exchange/payments':
         specifier: workspace:*
         version: link:../../packages/payments
+      '@stripe/stripe-js':
+        specifier: ^8.11.0
+        version: 8.11.0
       '@supabase/ssr':
         specifier: ^0.4.0
         version: 0.4.1(@supabase/supabase-js@2.99.3)
@@ -146,6 +149,9 @@ importers:
       '@agent-exchange/db':
         specifier: workspace:*
         version: link:../db
+      '@agent-exchange/payments':
+        specifier: workspace:*
+        version: link:../payments
       decimal.js:
         specifier: ^10.4.3
         version: 10.6.0
@@ -866,6 +872,10 @@ packages:
 
   '@sinclair/typebox@0.27.10':
     resolution: {integrity: sha512-MTBk/3jGLNB2tVxv6uLlFh1iu64iYOQ2PbdOSK3NW8JZsmlaOh2q6sdtKowBhfw8QFLmYNzTW4/oK4uATIi6ZA==}
+
+  '@stripe/stripe-js@8.11.0':
+    resolution: {integrity: sha512-3fVF4z3efsgwgyj64nFK+6F4/vMw0mUXD2TBbOfftJtKVNx4JNv3CSfe1fY4DCtCk0JFp8/YPNcRkzgV0HJ8cg==}
+    engines: {node: '>=12.16'}
 
   '@supabase/auth-js@2.99.3':
     resolution: {integrity: sha512-vMEVLA1kGGYd/kdsJSwtjiFUZM1nGfrz2DWmgMBZtocV48qL+L2+4QpIkueXyBEumMQZFEyhz57i/5zGHjvdBw==}
@@ -3421,6 +3431,8 @@ snapshots:
   '@rushstack/eslint-patch@1.16.1': {}
 
   '@sinclair/typebox@0.27.10': {}
+
+  '@stripe/stripe-js@8.11.0': {}
 
   '@supabase/auth-js@2.99.3':
     dependencies:

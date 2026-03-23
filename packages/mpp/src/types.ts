@@ -4,10 +4,19 @@
 export type PaymentMethod = 'tempo' | 'stripe' | 'lightning' | 'custom';
 export type PaymentIntent = 'charge' | 'session';
 
+export interface StripePaymentDetails {
+  paymentIntentId: string;
+  clientSecret: string;
+  amountCents: number;
+  currency: string;
+}
+
 export interface ChallengeResult {
   challengeId: string;
   wwwAuthenticate: string[];
   body: ProblemDetails;
+  /** Present when stripe is in the payment methods — agent uses clientSecret to complete payment */
+  stripe?: StripePaymentDetails;
 }
 
 export interface VerifyResult {
@@ -15,6 +24,8 @@ export interface VerifyResult {
   challengeId?: string;
   paymentMethod?: PaymentMethod;
   agentWalletAddress?: string;
+  /** The raw proof string — for stripe this is the PaymentIntent ID (pi_...) */
+  proofId?: string;
   error?: 'invalid-challenge' | 'expired' | 'already-used' | 'invalid-proof';
 }
 
@@ -39,4 +50,6 @@ export interface ProblemDetails {
   detail: string;
   challengeId?: string;
   paymentMethods?: string[];
+  /** Stripe-specific — present when stripe is an available payment method */
+  stripe?: StripePaymentDetails;
 }

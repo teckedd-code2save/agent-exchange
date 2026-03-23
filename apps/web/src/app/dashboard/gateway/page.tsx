@@ -26,7 +26,14 @@ interface PricingSummary {
   pricingModel: string;
 }
 
-type FlowStep = 'idle' | 'challenging' | 'challenged' | 'paying' | 'done' | 'error';
+type FlowStep = 'idle' | 'challenging' | 'challenged' | 'stripe-pay' | 'stripe-paying' | 'paying' | 'done' | 'error';
+
+interface StripeDetails {
+  paymentIntentId: string;
+  clientSecret: string;
+  amountCents: number;
+  currency: string;
+}
 
 interface Challenge {
   challengeId: string;
@@ -35,6 +42,7 @@ interface Challenge {
   currency: string;
   expires: string;
   rawHeader: string;
+  stripe?: StripeDetails;
 }
 
 interface FlowResult {
@@ -65,12 +73,12 @@ function parseWwwAuth(header: string): Omit<Challenge, 'rawHeader'> | null {
   return { challengeId, method, amount, currency, expires };
 }
 
-function mintCredential(challenge: Challenge, wallet: string): string {
+function mintCredential(challenge: Challenge, wallet: string, proof?: string): string {
   const payload = {
     challengeId:        challenge.challengeId,
     paymentMethod:      challenge.method,
     agentWalletAddress: wallet,
-    proof:              `test_proof_${Date.now()}`,
+    proof:              proof ?? `test_proof_${Date.now()}`,
   };
   return `Payment ${base64url(payload)}`;
 }
@@ -130,6 +138,7 @@ function GatewayTestInner() {
   const [result200,       setResult200]      = useState<FlowResult | null>(null);
   const [errorMsg,        setErrorMsg]       = useState('');
   const [log,             setLog]            = useState<string[]>([]);
+  const [stripeConfirmed, setStripeConfirmed] = useState(false);
 
   const appendLog = (msg: string) => setLog((prev) => [...prev, `${new Date().toISOString().slice(11, 23)}  ${msg}`]);
 
@@ -183,6 +192,7 @@ function GatewayTestInner() {
     setResult200(null);
     setErrorMsg('');
     setLog([]);
+    setStripeConfirmed(false);
   }
 
   // Step 1: Hit endpoint without auth → get 402
@@ -210,16 +220,30 @@ function GatewayTestInner() {
       const parsed = parseWwwAuth(wwwAuth);
       if (!parsed) { setErrorMsg('Could not parse WWW-Authenticate header'); setStep('error'); return; }
 
-      const ch: Challenge = { ...parsed, rawHeader: wwwAuth };
+      // Extract Stripe details from 402 body if present
+      let stripeDetails: StripeDetails | undefined;
+      try {
+        const bodyJson = JSON.parse(body) as { stripe?: StripeDetails };
+        if (bodyJson.stripe?.clientSecret) stripeDetails = bodyJson.stripe;
+      } catch { /* non-json body */ }
+
+      const ch: Challenge = { ...parsed, rawHeader: wwwAuth, stripe: stripeDetails };
       setChallenge(ch);
       setResult402({ status: 402, txId: null, body, durationMs: ms });
 
-      const cred = mintCredential(ch, wallet);
-      setCredential(cred);
       appendLog(`  Challenge: ${ch.challengeId}`);
       appendLog(`  Amount: ${ch.amount} ${ch.currency}  Method: ${ch.method}`);
-      appendLog(`  Credential minted (stub proof)`);
-      setStep('challenged');
+
+      if (ch.method === 'stripe' && stripeDetails) {
+        appendLog(`  Stripe PaymentIntent: ${stripeDetails.paymentIntentId}`);
+        appendLog(`  → Complete payment in Step 1.5 before hitting Pay & Call`);
+        setStep('stripe-pay');
+      } else {
+        const cred = mintCredential(ch, wallet);
+        setCredential(cred);
+        appendLog(`  Credential minted (stub proof)`);
+        setStep('challenged');
+      }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
       setStep('error');
@@ -273,7 +297,48 @@ function GatewayTestInner() {
     }
   }, [challenge, credential, gatewayUrl, reqMethod, reqBody, extraHeaders]);
 
-  const isLoading = step === 'challenging' || step === 'paying';
+  // Step 1.5: Confirm Stripe payment using test card via Stripe.js
+  const confirmStripePayment = useCallback(async () => {
+    if (!challenge?.stripe) return;
+    setStep('stripe-paying');
+    appendLog(`  Confirming Stripe payment (test card 4242...)`);
+    try {
+      const stripeKey = process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
+      if (!stripeKey || stripeKey === 'pk_test_...') {
+        setErrorMsg('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY not set in .env.local — add your Stripe test key');
+        setStep('error');
+        return;
+      }
+      const { loadStripe } = await import('@stripe/stripe-js');
+      const stripe = await loadStripe(stripeKey);
+      if (!stripe) { setErrorMsg('Failed to load Stripe.js'); setStep('error'); return; }
+
+      const { error, paymentIntent } = await stripe.confirmCardPayment(
+        challenge.stripe.clientSecret,
+        { payment_method: { card: { token: 'tok_visa' } } },
+      );
+
+      if (error) {
+        appendLog(`  Stripe error: ${error.message ?? 'unknown'}`);
+        setErrorMsg(`Stripe payment failed: ${error.message ?? 'unknown'}`);
+        setStep('error');
+        return;
+      }
+
+      appendLog(`  Stripe payment succeeded: ${paymentIntent?.id}`);
+      setStripeConfirmed(true);
+      // Mint credential with the PaymentIntent ID as the proof
+      const cred = mintCredential(challenge, wallet, paymentIntent?.id);
+      setCredential(cred);
+      appendLog(`  Credential minted with proof=${paymentIntent?.id}`);
+      setStep('challenged');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setStep('error');
+    }
+  }, [challenge, wallet]);
+
+  const isLoading = step === 'challenging' || step === 'paying' || step === 'stripe-paying';
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -382,6 +447,53 @@ function GatewayTestInner() {
           <span className="text-xs font-mono text-indigo-300 font-semibold shrink-0">{reqMethod}</span>
           <code className="text-xs font-mono text-gray-300 flex-1 break-all">{gatewayUrl}</code>
           <CopyButton text={`http://localhost:3000${gatewayUrl}`} />
+        </div>
+      )}
+
+      {/* Stripe payment panel — shown between Step 1 and Step 2 */}
+      {(step === 'stripe-pay' || step === 'stripe-paying' || stripeConfirmed) && challenge?.stripe && (
+        <div className={`border rounded-xl p-5 space-y-4 ${stripeConfirmed ? 'bg-green-900/10 border-green-800/40' : 'bg-yellow-900/10 border-yellow-700/40'}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-yellow-300">Step 1.5 — Complete Stripe Payment</p>
+              <p className="text-xs text-gray-400 mt-0.5">Pay with a test card to get a PaymentIntent proof the gateway can verify</p>
+            </div>
+            {stripeConfirmed && <span className="text-xs px-2 py-1 rounded bg-green-900/40 border border-green-700/40 text-green-400 font-medium">Paid ✓</span>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="bg-gray-900 rounded-lg p-3">
+              <p className="text-gray-500 mb-1">PaymentIntent ID</p>
+              <div className="flex items-center gap-1">
+                <code className="text-yellow-300 font-mono truncate flex-1">{challenge.stripe.paymentIntentId}</code>
+                <CopyButton text={challenge.stripe.paymentIntentId} />
+              </div>
+            </div>
+            <div className="bg-gray-900 rounded-lg p-3">
+              <p className="text-gray-500 mb-1">Amount</p>
+              <p className="text-white font-mono">${(challenge.stripe.amountCents / 100).toFixed(2)} {challenge.stripe.currency.toUpperCase()}</p>
+            </div>
+          </div>
+
+          <div className="bg-gray-900 rounded-lg p-3 text-xs space-y-1.5">
+            <p className="text-gray-400 font-semibold">Test card (Stripe test mode)</p>
+            <div className="font-mono text-gray-300 space-y-0.5">
+              <p>Number: <span className="text-white">4242 4242 4242 4242</span></p>
+              <p>Expiry: <span className="text-white">any future date</span>  CVC: <span className="text-white">any 3 digits</span></p>
+            </div>
+          </div>
+
+          {!stripeConfirmed && (
+            <button
+              onClick={confirmStripePayment}
+              disabled={step === 'stripe-paying'}
+              className="w-full py-2.5 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              {step === 'stripe-paying' ? (
+                <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Confirming payment...</>
+              ) : 'Confirm test payment (tok_visa)'}
+            </button>
+          )}
         </div>
       )}
 

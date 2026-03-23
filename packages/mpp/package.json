@@ -10,6 +10,7 @@
   "dependencies": {
     "@agent-exchange/cache": "workspace:*",
     "@agent-exchange/db": "workspace:*",
+    "@agent-exchange/payments": "workspace:*",
     "decimal.js": "^10.4.3"
   },
   "devDependencies": {
