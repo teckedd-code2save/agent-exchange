@@ -30,5 +30,8 @@ export async function GET(req: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  redirect('/dashboard');
+  const next = searchParams.get('next') ?? '/dashboard';
+  // Only allow relative paths to prevent open redirects
+  const safeNext = next.startsWith('/') ? next : '/dashboard';
+  redirect(safeNext);
 }
