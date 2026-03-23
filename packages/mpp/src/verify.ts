@@ -3,6 +3,7 @@ import type { PrismaClient } from '@agent-exchange/db';
 import type { CacheAdapter } from '@agent-exchange/cache';
 import { CacheKeys } from '@agent-exchange/cache';
 import type { VerifyResult, MppCredentialPayload } from './types';
+import { verifyTempoPayment } from '@agent-exchange/payments';
 
 export interface VerifyCredentialParams {
   authorizationHeader: string;
@@ -93,16 +94,13 @@ export async function verifyCredential(params: VerifyCredentialParams): Promise<
 async function verifyProof(
   method: string,
   proof: string,
-  _amount: string,
+  amount: string,
 ): Promise<boolean> {
   if (method === 'stripe') {
     return verifyStripeProof(proof);
   }
   if (method === 'tempo') {
-    // Phase 1 stub — replace with Tempo SDK when available
-    // See docs/TEMPO_BLOCKER.md
-    console.info('[mpp:verify] tempo proof stubbed for:', proof.slice(0, 16));
-    return true;
+    return verifyTempoProof(proof, amount);
   }
   console.warn('[mpp:verify] unknown payment method, rejecting:', method);
   return false;
@@ -133,4 +131,8 @@ async function verifyStripeProof(paymentIntentId: string): Promise<boolean> {
     console.error('[mpp:verify] Stripe error:', err);
     return false;
   }
+}
+
+async function verifyTempoProof(txHash: string, expectedAmount: string): Promise<boolean> {
+  return verifyTempoPayment(txHash, expectedAmount);
 }

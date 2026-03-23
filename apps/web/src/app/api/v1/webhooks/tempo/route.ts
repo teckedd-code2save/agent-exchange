@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const { event, txHash } = body;
 
     if (event === 'payment.settled') {
-      const isValid = await verifyTempoPayment(txHash);
+      const isValid = await verifyTempoPayment(txHash, body.amount);
       if (!isValid) {
         return problemDetails(400, 'Bad Request', 'Tempo payment verification failed');
       }
