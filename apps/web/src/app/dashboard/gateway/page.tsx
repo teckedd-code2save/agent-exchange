@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -110,9 +111,12 @@ function CopyButton({ text }: { text: string }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function GatewayTestPage() {
+function GatewayTestInner() {
+  const searchParams = useSearchParams();
+  const preselect = searchParams.get('service') ?? '';
+
   const [services,        setServices]       = useState<ServiceSummary[]>([]);
-  const [selectedSlug,    setSelectedSlug]   = useState('');
+  const [selectedSlug,    setSelectedSlug]   = useState(preselect);
   const [selectedEp,      setSelectedEp]     = useState('');
   const [wallet,          setWallet]         = useState('');
   const [reqMethod,       setReqMethod]      = useState('GET');
@@ -137,9 +141,14 @@ export default function GatewayTestPage() {
       .then((d: { data: ServiceSummary[] }) => {
         const active = d.data.filter((s) => s.status === 'active');
         setServices(active);
-        if (active[0]) setSelectedSlug(active[0].slug);
+        // Use preselected slug if valid, else fall back to first
+        const match = preselect && active.find((s) => s.slug === preselect);
+        if (!selectedSlug || !match) {
+          setSelectedSlug(match ? preselect : (active[0]?.slug ?? ''));
+        }
       })
       .catch(() => appendLog('ERROR: could not load services'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load endpoints when service changes
@@ -529,5 +538,14 @@ curl -i http://localhost:3000${gatewayUrl} \\
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function GatewayTestPage() {
+  return (
+    <Suspense fallback={<div className="text-gray-500 text-sm p-8">Loading...</div>}>
+      <GatewayTestInner />
+    </Suspense>
   );
 }

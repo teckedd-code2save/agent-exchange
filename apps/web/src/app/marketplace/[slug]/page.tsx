@@ -146,18 +146,30 @@ export default async function ServiceDetailPage({ params }: { params: { slug: st
 
             {/* MPP Quick-start */}
             <Card title="Agent Quick-start">
-              <p className="text-xs text-gray-400 mb-3">Call any endpoint — the server issues an HTTP 402 MPP challenge automatically.</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-gray-400">Call any endpoint — the gateway issues an HTTP 402 MPP challenge automatically.</p>
+                <Link
+                  href={`/dashboard/gateway?service=${service.slug}`}
+                  className="ml-4 shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+                >
+                  Try this API →
+                </Link>
+              </div>
               <pre className="bg-gray-950 rounded-lg p-4 text-xs text-gray-300 overflow-x-auto">
-{`# 1. Discover the service
-GET /api/v1/services/${service.slug}
+{`# 1. Call an endpoint — get a 402 challenge
+curl -i https://agentexchange.dev/api/v1/gateway/${service.slug}${service.endpoints[0]?.path ?? '/v1/...'}
 
-# 2. Call an endpoint (expect 402)
-POST ${service.serviceUrl}${service.endpoints[0]?.path ?? '/v1/...'}
+# → 402 Payment Required
+# → WWW-Authenticate: Payment challenge="ch_...", method="tempo", amount="0.001", currency="USDC"
 
-# 3. Read the WWW-Authenticate header
-# 4. Sign the credential with your Tempo wallet
-# 5. Retry with Authorization: MPP <credential>
-# Server returns receipt + response`}
+# 2. Mint a credential with your wallet
+# Authorization: Payment <base64url({ challengeId, paymentMethod, agentWalletAddress, proof })>
+
+# 3. Retry with the credential
+curl -i https://agentexchange.dev/api/v1/gateway/${service.slug}${service.endpoints[0]?.path ?? '/v1/...'} \\
+  -H 'Authorization: Payment eyJjaGFsbGVuZ2VJZCI6ImNoXy4uLiJ9...'
+
+# → 200 OK + proxied response + X-Agent-Exchange-Tx: tx_id`}
               </pre>
             </Card>
           </div>
