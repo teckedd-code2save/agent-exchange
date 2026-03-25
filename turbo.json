@@ -4,7 +4,30 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "ADMIN_EMAILS",
+        "AUTH_BYPASS",
+        "CACHE_PROVIDER",
+        "DATABASE_URL",
+        "DIRECT_URL",
+        "MPP_CHALLENGE_TTL_SECONDS",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_AUTH_BYPASS",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "REDIS_URL",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "TEMPO_API_KEY",
+        "TEMPO_WALLET_ADDRESS",
+        "UPSTASH_REDIS_REST_TOKEN",
+        "UPSTASH_REDIS_REST_URL",
+        "VERCEL_PROJECT_PRODUCTION_URL",
+        "VERCEL_URL"
+      ]
     },
     "dev": {
       "cache": false,
@@ -15,7 +38,30 @@
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "env": [
+        "ADMIN_EMAILS",
+        "AUTH_BYPASS",
+        "CACHE_PROVIDER",
+        "DATABASE_URL",
+        "DIRECT_URL",
+        "MPP_CHALLENGE_TTL_SECONDS",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_AUTH_BYPASS",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "REDIS_URL",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "TEMPO_API_KEY",
+        "TEMPO_WALLET_ADDRESS",
+        "UPSTASH_REDIS_REST_TOKEN",
+        "UPSTASH_REDIS_REST_URL",
+        "VERCEL_PROJECT_PRODUCTION_URL",
+        "VERCEL_URL"
+      ]
     },
     "test": {
       "dependsOn": ["^build"],

@@ -1,4 +1,5 @@
 import { prisma } from '@agent-exchange/db';
+import type { Prisma } from '@agent-exchange/db';
 import { requireAdminUser } from '@/lib/admin';
 
 async function getAdminOverview() {
@@ -16,13 +17,15 @@ async function getAdminOverview() {
     }),
   ]);
 
+  type AdminService = Prisma.PromiseReturnType<typeof prisma.service.findMany>[number];
+
   return {
     providerCount: providers,
     serviceCount: services.length,
     services,
     calls,
-    draftCount: services.filter((service) => service.status === 'draft').length,
-    pausedCount: services.filter((service) => service.status === 'paused').length,
+    draftCount: services.filter((service: AdminService) => service.status === 'draft').length,
+    pausedCount: services.filter((service: AdminService) => service.status === 'paused').length,
   };
 }
 
