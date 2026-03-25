@@ -29,6 +29,7 @@ function statusTone(status: number) {
 export default async function AdminTransactionsPage() {
   await requireAdminUser();
   const calls = await getCallsForAdmin();
+  type AdminCall = (typeof calls)[number];
 
   return (
     <main className="mx-auto max-w-7xl space-y-6">
@@ -54,7 +55,7 @@ export default async function AdminTransactionsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
-            {calls.map((call) => (
+            {calls.map((call: AdminCall) => (
               <tr key={call.id}>
                 <td className="px-5 py-4">
                   <p className="font-medium text-white">{call.service.name}</p>

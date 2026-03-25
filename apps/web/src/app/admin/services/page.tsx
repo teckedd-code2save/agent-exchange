@@ -55,6 +55,7 @@ function statusTone(status: string) {
 export default async function AdminServicesPage() {
   await requireAdminUser();
   const services = await getServicesForAdmin();
+  type AdminManagedService = (typeof services)[number];
 
   return (
     <main className="mx-auto max-w-6xl space-y-6">
@@ -67,7 +68,7 @@ export default async function AdminServicesPage() {
       </div>
 
       <div className="grid gap-4">
-        {services.map((service) => (
+        {services.map((service: AdminManagedService) => (
           <article key={service.id} className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-3xl">
