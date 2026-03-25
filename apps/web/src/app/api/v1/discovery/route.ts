@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
   });
 
   const hasMore = services.length > limit;
-  const items = hasMore ? services.slice(0, limit) : services;
+  const items: Array<(typeof services)[number]> = hasMore ? services.slice(0, limit) : services;
   const nextCursor = hasMore ? items[items.length - 1]?.id : null;
 
   // Build the proxy endpoint for each service
