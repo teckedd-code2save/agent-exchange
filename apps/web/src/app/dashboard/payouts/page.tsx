@@ -25,6 +25,8 @@ export default async function PayoutsPage() {
   }
 
   const provider = user ? await getBalances(user.id) : null;
+  const providerServices: Array<(NonNullable<typeof provider>)['services'][number]> =
+    provider?.services ?? [];
 
   return (
     <main className="mx-auto max-w-5xl space-y-6">
@@ -68,12 +70,12 @@ export default async function PayoutsPage() {
       <section className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6">
         <h2 className="text-lg font-semibold text-white">Services tied to this operator</h2>
         <div className="mt-4 flex flex-wrap gap-2">
-          {(provider?.services ?? []).map((service) => (
+          {providerServices.map((service) => (
             <span key={service.id} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">
               {service.name} · {service.status}
             </span>
           ))}
-          {(provider?.services ?? []).length === 0 && (
+          {providerServices.length === 0 && (
             <p className="text-sm text-slate-500">No services registered yet.</p>
           )}
         </div>

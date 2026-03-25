@@ -22,13 +22,15 @@ async function getAnalytics(userId: string) {
     return null;
   }
 
-  const services = provider.services.map((service) => {
-    const calls = service.calls;
-    const successes = calls.filter((call) => call.status >= 200 && call.status < 300).length;
+  const providerServices: Array<(typeof provider.services)[number]> = provider.services;
+
+  const services = providerServices.map((service) => {
+    const calls: Array<(typeof service.calls)[number]> = service.calls;
+    const successes = calls.filter((call: (typeof calls)[number]) => call.status >= 200 && call.status < 300).length;
     const averageLatency = calls.length
-      ? Math.round(calls.reduce((sum, call) => sum + call.latencyMs, 0) / calls.length)
+      ? Math.round(calls.reduce((sum: number, call: (typeof calls)[number]) => sum + call.latencyMs, 0) / calls.length)
       : 0;
-    const revenue = calls.reduce((sum, call) => sum + Number(call.amount), 0);
+    const revenue = calls.reduce((sum: number, call: (typeof calls)[number]) => sum + Number(call.amount), 0);
 
     return {
       id: service.id,
@@ -41,15 +43,15 @@ async function getAnalytics(userId: string) {
       averageLatency,
       revenue: revenue.toFixed(4),
       environments: {
-        sandbox: calls.filter((call) => call.environment === 'sandbox').length,
-        testnet: calls.filter((call) => call.environment === 'testnet').length,
-        production: calls.filter((call) => call.environment === 'production').length,
+        sandbox: calls.filter((call: (typeof calls)[number]) => call.environment === 'sandbox').length,
+        testnet: calls.filter((call: (typeof calls)[number]) => call.environment === 'testnet').length,
+        production: calls.filter((call: (typeof calls)[number]) => call.environment === 'production').length,
       },
     };
   });
 
-  const totalCalls = services.reduce((sum, service) => sum + service.calls, 0);
-  const totalRevenue = services.reduce((sum, service) => sum + Number(service.revenue), 0);
+  const totalCalls = services.reduce((sum: number, service: (typeof services)[number]) => sum + service.calls, 0);
+  const totalRevenue = services.reduce((sum: number, service: (typeof services)[number]) => sum + Number(service.revenue), 0);
 
   return {
     provider,
@@ -58,8 +60,8 @@ async function getAnalytics(userId: string) {
       serviceCount: services.length,
       totalCalls,
       totalRevenue: totalRevenue.toFixed(4),
-      sandboxCalls: services.reduce((sum, service) => sum + service.environments.sandbox, 0),
-      productionCalls: services.reduce((sum, service) => sum + service.environments.production, 0),
+      sandboxCalls: services.reduce((sum: number, service: (typeof services)[number]) => sum + service.environments.sandbox, 0),
+      productionCalls: services.reduce((sum: number, service: (typeof services)[number]) => sum + service.environments.production, 0),
     },
   };
 }
@@ -150,7 +152,7 @@ export default async function AnalyticsPage() {
       <section className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6">
         <h2 className="text-lg font-semibold text-white">Per-service performance</h2>
         <div className="mt-5 grid gap-4">
-          {analytics.services.map((service) => (
+          {analytics.services.map((service: (typeof analytics.services)[number]) => (
             <article key={service.id} className="rounded-3xl border border-slate-800 bg-slate-950/60 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>

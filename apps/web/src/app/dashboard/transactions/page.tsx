@@ -16,7 +16,8 @@ async function getRecentCalls(userId: string) {
     return [];
   }
 
-  const serviceIds = provider.services.map((service) => service.id);
+  const providerServices: Array<(typeof provider.services)[number]> = provider.services;
+  const serviceIds = providerServices.map((service: (typeof providerServices)[number]) => service.id);
   if (serviceIds.length === 0) {
     return [];
   }
@@ -80,7 +81,7 @@ export default async function TransactionsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {calls.map((call) => (
+              {calls.map((call: (typeof calls)[number]) => (
                 <tr key={call.id} className="align-top">
                   <td className="px-5 py-4">
                     <p className="font-medium text-white">{call.service.name}</p>

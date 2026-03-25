@@ -1,19 +1,6 @@
 import Link from 'next/link';
 import { getAppUrl } from '@/lib/env';
-
-type DiscoveryService = {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  tags: string[];
-  studioSlug: string;
-  totalCalls: number;
-  pricingConfig: {
-    amount?: string;
-    currency?: string;
-  } | null;
-};
+import type { DiscoveryServiceRecord } from '@/lib/types/studio';
 
 async function getServices() {
   const baseUrl = getAppUrl();
@@ -21,11 +8,11 @@ async function getServices() {
     const res = await fetch(`${baseUrl}/api/v1/discovery?env=sandbox`, {
       cache: 'no-store',
     });
-    if (!res.ok) return { results: [] as DiscoveryService[] };
-    return res.json() as Promise<{ results: DiscoveryService[] }>;
+    if (!res.ok) return { results: [] as DiscoveryServiceRecord[] };
+    return res.json() as Promise<{ results: DiscoveryServiceRecord[] }>;
   } catch (err) {
     console.error('Discovery fetch error:', err);
-    return { results: [] as DiscoveryService[] };
+    return { results: [] as DiscoveryServiceRecord[] };
   }
 }
 
@@ -73,7 +60,7 @@ export default async function MarketplacePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {results.map((service) => (
+              {results.map((service: DiscoveryServiceRecord) => (
                 (() => {
                   const pricing = service.pricingConfig ?? {};
                   return (

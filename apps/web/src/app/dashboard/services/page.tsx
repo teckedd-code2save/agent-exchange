@@ -4,23 +4,9 @@ import { createSupabaseServerClient } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
 import { isAuthBypassEnabled } from '@/lib/admin';
 import { getAppUrl } from '@/lib/env';
+import type { ProviderServiceRecord } from '@/lib/types/studio';
 
-type ProviderService = {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  studioSlug: string;
-  status: string;
-  pricingType: string;
-  pricingConfig: { amount?: string; currency?: string } | null;
-  tags: string[];
-  endpoint: string;
-  supportedPayments: string[];
-  _count?: { calls: number; reviews: number };
-};
-
-async function getServices(cookieHeader: string): Promise<ProviderService[]> {
+async function getServices(cookieHeader: string): Promise<ProviderServiceRecord[]> {
   const baseUrl = getAppUrl();
   const response = await fetch(`${baseUrl}/api/v1/provider/services`, {
     headers: { Cookie: cookieHeader },
@@ -31,7 +17,7 @@ async function getServices(cookieHeader: string): Promise<ProviderService[]> {
     return [];
   }
 
-  const payload = await response.json() as { results?: ProviderService[] };
+  const payload = await response.json() as { results?: ProviderServiceRecord[] };
   return payload.results ?? [];
 }
 
@@ -89,7 +75,7 @@ export default async function ServicesPage() {
         </div>
       ) : (
         <div className="grid gap-5">
-          {services.map((service) => {
+          {services.map((service: ProviderServiceRecord) => {
             const pricing = service.pricingConfig ?? {};
             return (
               <section key={service.id} className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6 shadow-lg shadow-slate-950/20">

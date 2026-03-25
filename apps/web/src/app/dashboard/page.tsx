@@ -3,28 +3,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { isAuthBypassEnabled } from '@/lib/admin';
 import { getAppUrl } from '@/lib/env';
-
-type DashboardService = {
-  serviceId: string;
-  name: string;
-  studioSlug: string;
-  status: 'draft' | 'sandbox' | 'testnet' | 'live' | 'paused';
-  stats: {
-    callsLast30d: number;
-    successRate: number;
-    revenueUsd: string;
-    avgLatencyMs: number;
-  };
-};
-
-type DashboardAnalytics = {
-  summary: {
-    totalRevenue: string;
-    totalCallsLast30d: number;
-    serviceCount: number;
-  };
-  services: DashboardService[];
-};
+import type { ProviderAnalyticsResponse, ProviderAnalyticsService } from '@/lib/types/studio';
 
 async function getAnalytics(cookieStore: string) {
   try {
@@ -33,7 +12,7 @@ async function getAnalytics(cookieStore: string) {
       cache: 'no-store',
     });
     if (!res.ok) return null;
-    return res.json() as Promise<DashboardAnalytics>;
+    return res.json() as Promise<ProviderAnalyticsResponse>;
   } catch {
     return null;
   }
@@ -105,7 +84,7 @@ export default async function DashboardPage() {
 
       <h2 className="text-xl font-bold mb-6">Your Services</h2>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {data.services.map((service) => (
+        {data.services.map((service: ProviderAnalyticsService) => (
           <div key={service.serviceId} className="bg-slate-900 rounded-xl p-6 border border-slate-800 flex flex-col">
             <div className="flex justify-between items-start mb-4">
               <div>
