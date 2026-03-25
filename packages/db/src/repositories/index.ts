@@ -1,5 +1,6 @@
 import { prisma } from '../index';
-import type { Prisma } from '@prisma/client';
+
+type CreateCallData = Parameters<typeof prisma.call.create>[0]['data'];
 
 export async function getServiceBySlug(slug: string) {
   return prisma.service.findUnique({
@@ -8,7 +9,7 @@ export async function getServiceBySlug(slug: string) {
   });
 }
 
-export async function createCall(data: Prisma.CallUncheckedCreateInput) {
+export async function createCall(data: CreateCallData) {
   return prisma.call.create({ data });
 }
 
