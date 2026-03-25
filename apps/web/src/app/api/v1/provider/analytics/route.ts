@@ -38,13 +38,13 @@ export async function GET() {
   const typedServices: Array<(typeof services)[number]> = services;
 
   const summary = typedServices.map((service) => {
-    const calls = service.calls;
-    const successfulCalls = calls.filter((c) => c.status >= 200 && c.status < 300);
-    const paidCalls = calls.filter((c) => c.challengeSolved);
-    const revenue = paidCalls.reduce((sum, c) => sum + Number(c.amount), 0);
+    const calls: Array<(typeof service.calls)[number]> = service.calls;
+    const successfulCalls = calls.filter((c: (typeof calls)[number]) => c.status >= 200 && c.status < 300);
+    const paidCalls = calls.filter((c: (typeof calls)[number]) => c.challengeSolved);
+    const revenue = paidCalls.reduce((sum: number, c: (typeof paidCalls)[number]) => sum + Number(c.amount), 0);
     const avgLatency =
       calls.length > 0
-        ? Math.round(calls.reduce((sum, c) => sum + c.latencyMs, 0) / calls.length)
+        ? Math.round(calls.reduce((sum: number, c: (typeof calls)[number]) => sum + c.latencyMs, 0) / calls.length)
         : 0;
 
     return {
@@ -61,16 +61,16 @@ export async function GET() {
         revenueUsd: revenue.toFixed(4),
         avgLatencyMs: avgLatency,
         byEnvironment: {
-          sandbox: calls.filter((c) => c.environment === 'sandbox').length,
-          testnet: calls.filter((c) => c.environment === 'testnet').length,
-          production: calls.filter((c) => c.environment === 'production').length,
+          sandbox: calls.filter((c: (typeof calls)[number]) => c.environment === 'sandbox').length,
+          testnet: calls.filter((c: (typeof calls)[number]) => c.environment === 'testnet').length,
+          production: calls.filter((c: (typeof calls)[number]) => c.environment === 'production').length,
         },
       },
     };
   });
 
-  const totalRevenue = summary.reduce((sum, s) => sum + parseFloat(s.stats.revenueUsd), 0);
-  const totalCalls = summary.reduce((sum, s) => sum + s.stats.callsLast30d, 0);
+  const totalRevenue = summary.reduce((sum: number, s: (typeof summary)[number]) => sum + parseFloat(s.stats.revenueUsd), 0);
+  const totalCalls = summary.reduce((sum: number, s: (typeof summary)[number]) => sum + s.stats.callsLast30d, 0);
 
   return NextResponse.json({
     provider: {

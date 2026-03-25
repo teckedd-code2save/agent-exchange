@@ -31,7 +31,10 @@ export async function GET(
 
   const baseUrl = request.nextUrl.origin;
   const avgRating = service.reviews.length
-    ? service.reviews.reduce((s, r) => s + r.rating, 0) / service.reviews.length
+    ? service.reviews.reduce(
+        (s: number, r: (typeof service.reviews)[number]) => s + r.rating,
+        0
+      ) / service.reviews.length
     : null;
 
   // Machine-readable contract — everything an agent needs to know
