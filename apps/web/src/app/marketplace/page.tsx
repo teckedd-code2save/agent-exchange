@@ -1,17 +1,31 @@
 import Link from 'next/link';
 import { getAppUrl } from '@/lib/env';
 
+type DiscoveryService = {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  tags: string[];
+  studioSlug: string;
+  totalCalls: number;
+  pricingConfig: {
+    amount?: string;
+    currency?: string;
+  } | null;
+};
+
 async function getServices() {
   const baseUrl = getAppUrl();
   try {
     const res = await fetch(`${baseUrl}/api/v1/discovery?env=sandbox`, {
       cache: 'no-store',
     });
-    if (!res.ok) return { results: [] };
-    return res.json();
+    if (!res.ok) return { results: [] as DiscoveryService[] };
+    return res.json() as Promise<{ results: DiscoveryService[] }>;
   } catch (err) {
     console.error('Discovery fetch error:', err);
-    return { results: [] };
+    return { results: [] as DiscoveryService[] };
   }
 }
 
@@ -59,7 +73,10 @@ export default async function MarketplacePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {results.map((service: any) => (
+              {results.map((service) => (
+                (() => {
+                  const pricing = service.pricingConfig ?? {};
+                  return (
                 <div key={service.id} className="bg-slate-900 rounded-xl p-6 border border-slate-800 flex flex-col hover:border-slate-700 transition-colors group">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -67,7 +84,7 @@ export default async function MarketplacePage() {
                       <p className="text-xs text-blue-500/80 font-semibold uppercase tracking-wider">{service.category}</p>
                     </div>
                     <div className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-1 rounded">
-                      {service.pricingConfig.amount} {service.pricingConfig.currency}
+                      {pricing.amount ?? '0.01'} {pricing.currency ?? 'USDC'}
                     </div>
                   </div>
                   
@@ -92,6 +109,8 @@ export default async function MarketplacePage() {
                     </Link>
                   </div>
                 </div>
+                  );
+                })()
               ))}
             </div>
           )}

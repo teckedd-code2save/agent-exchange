@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@agent-exchange/db';
+import { PaymentType, prisma } from '@agent-exchange/db';
+import type { PaymentType as PaymentTypeValue, Prisma } from '@agent-exchange/db';
 
 /**
  * GET /api/v1/discovery
@@ -32,10 +33,16 @@ export async function GET(request: NextRequest) {
   };
   const status = statusMap[env] ?? 'live';
 
-  const where: any = { status };
+  const isValidPayment = payment
+    ? Object.values(PaymentType).includes(payment as (typeof PaymentType)[keyof typeof PaymentType])
+    : false;
+
+  const where: Prisma.ServiceWhereInput = { status };
   if (category) where.category = category;
   if (tags.length) where.tags = { hasEvery: tags };
-  if (payment) where.supportedPayments = { has: payment };
+  if (payment && isValidPayment) {
+    where.supportedPayments = { has: payment as PaymentTypeValue };
+  }
 
   const services = await prisma.service.findMany({
     where,
@@ -70,7 +77,7 @@ export async function GET(request: NextRequest) {
   const results = items.map((s) => ({
     ...s,
     proxyEndpoint: `${baseUrl}/api/v1/proxy/${s.studioSlug}`,
-    pricingConfig: s.pricingConfig as any,
+    pricingConfig: s.pricingConfig as { amount?: string; currency?: string } | null,
   }));
 
   return NextResponse.json({

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@agent-exchange/db';
 
+type PricingConfig = {
+  amount?: string;
+  currency?: string;
+};
+
 async function handleProxy(
   request: NextRequest,
   { params }: { params: { slug: string; path: string[] } }
@@ -37,11 +42,13 @@ async function handleProxy(
     let currency = 'USDC';
     try {
       if (service.pricingConfig && typeof service.pricingConfig === 'object') {
-        const conf = service.pricingConfig as any;
+        const conf = service.pricingConfig as PricingConfig;
         if (conf.amount) amount = conf.amount;
         if (conf.currency) currency = conf.currency;
       }
-    } catch {}
+    } catch {
+      console.warn('[MPP Studio Proxy] Failed to parse pricing config for service', slug);
+    }
 
     if (isSandbox) {
       // Sandbox validation
@@ -147,9 +154,10 @@ async function handleProxy(
       headers: responseHeaders,
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown proxy error';
     console.error('[MPP Studio Proxy Error]', err);
-    return NextResponse.json({ error: 'Internal proxy error', details: err.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal proxy error', details: message }, { status: 500 });
   }
 }
 

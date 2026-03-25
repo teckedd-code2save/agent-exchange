@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       network: 'tempo-testnet',
       message: `🎉 ${FAUCET_AMOUNT} USDC testnet tokens sent to ${walletId}`,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Faucet Error]', err);
     return NextResponse.json({ error: 'Faucet processing failed' }, { status: 500 });
   }

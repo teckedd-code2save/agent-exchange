@@ -12,7 +12,9 @@ export default function NewServicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<{
+    sandboxEndpoint: string;
+  } | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -49,8 +51,8 @@ export default function NewServicePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');
       setResult(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -78,12 +80,12 @@ export default function NewServicePage() {
             <div className="bg-slate-950 rounded-lg p-4 font-mono text-xs border border-slate-800 overflow-x-auto">
               <p className="text-slate-500 mb-1"># Step 1: Hit the endpoint — get a 402 challenge</p>
               <p className="text-white">curl -X POST {result.sandboxEndpoint}/your/path \</p>
-              <p className="text-white ml-4">-H "Content-Type: application/json" \</p>
+              <p className="text-white ml-4">-H &quot;Content-Type: application/json&quot; \</p>
               <p className="text-white ml-4">-d {'\'{"input": "test"}\''}</p>
               <p className="text-slate-500 mt-3 mb-1"># Step 2: Resend with sandbox credential</p>
               <p className="text-white">curl -X POST {result.sandboxEndpoint}/your/path \</p>
-              <p className="text-white ml-4">-H "Content-Type: application/json" \</p>
-              <p className="text-white ml-4">-H "Authorization: Payment sandbox-credential" \</p>
+              <p className="text-white ml-4">-H &quot;Content-Type: application/json&quot; \</p>
+              <p className="text-white ml-4">-H &quot;Authorization: Payment sandbox-credential&quot; \</p>
               <p className="text-white ml-4">-d {'\'{"input": "test"}\''}</p>
             </div>
           </div>
@@ -148,7 +150,7 @@ export default function NewServicePage() {
             placeholder="https://api.yourservice.com/v1"
             className="w-full rounded-md bg-slate-900 border border-slate-700 text-white px-3 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400 font-mono"
           />
-          <p className="text-xs text-slate-500 mt-1">We'll proxy requests from mpp.studio to this URL after payment verification.</p>
+          <p className="text-xs text-slate-500 mt-1">We&apos;ll proxy requests from MPP Studio to this URL after payment verification.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
