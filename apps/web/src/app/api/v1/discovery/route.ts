@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PaymentType, prisma } from '@agent-exchange/db';
+import { prisma } from '@agent-exchange/db';
 import type { PaymentType as PaymentTypeValue, Prisma } from '@agent-exchange/db';
+
+const VALID_PAYMENT_TYPES: PaymentTypeValue[] = ['tempo', 'stripe', 'lightning', 'sandbox'];
 
 /**
  * GET /api/v1/discovery
@@ -33,9 +35,7 @@ export async function GET(request: NextRequest) {
   };
   const status = statusMap[env] ?? 'live';
 
-  const isValidPayment = payment
-    ? Object.values(PaymentType).includes(payment as (typeof PaymentType)[keyof typeof PaymentType])
-    : false;
+  const isValidPayment = payment ? VALID_PAYMENT_TYPES.includes(payment as PaymentTypeValue) : false;
 
   const where: Prisma.ServiceWhereInput = { status };
   if (category) where.category = category;
