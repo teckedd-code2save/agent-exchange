@@ -1,10 +1,12 @@
 import { createSupabaseServerClient } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { isAuthBypassEnabled } from '@/lib/admin';
+import { getAppUrl } from '@/lib/env';
 
 async function getAnalytics(cookieStore: string) {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/v1/provider/analytics`, {
+    const res = await fetch(`${getAppUrl()}/api/v1/provider/analytics`, {
       headers: { Cookie: cookieStore },
       cache: 'no-store',
     });
@@ -17,7 +19,7 @@ async function getAnalytics(cookieStore: string) {
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser(); const userId = user?.id;
-  if (!userId) redirect('/login');
+  if (!userId && !isAuthBypassEnabled()) redirect('/login');
 
   const { cookies } = await import('next/headers');
   const cookieString = cookies()
@@ -50,7 +52,12 @@ export default async function DashboardPage() {
   return (
     <main className="max-w-6xl mx-auto p-8">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Studio Overview</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Studio Overview</h1>
+          {isAuthBypassEnabled() && (
+            <p className="mt-2 text-sm text-amber-300">Local dev auth bypass is active. Services and analytics are being attached to the local dev provider.</p>
+          )}
+        </div>
         <Link
           href="/dashboard/services/new"
           className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300 bg-slate-50 text-slate-900 shadow hover:bg-slate-50/90 h-9 px-4 py-2"

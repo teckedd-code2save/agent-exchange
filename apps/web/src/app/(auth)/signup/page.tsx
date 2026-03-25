@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseBrowserKey } from '@/lib/env';
 
 type Mode = 'magic' | 'password';
 type Step = 'form' | 'sent' | 'loading';
@@ -10,7 +11,7 @@ type Step = 'form' | 'sent' | 'loading';
 function getSupabase() {
   return createBrowserClient(
     process.env['NEXT_PUBLIC_SUPABASE_URL']!,
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY']!,
+    getSupabaseBrowserKey(),
   );
 }
 
@@ -26,8 +27,9 @@ function Spinner() {
 function SignupForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get('next') ?? '/dashboard';
+  const authBypassEnabled = process.env['NEXT_PUBLIC_AUTH_BYPASS'] === 'true';
 
-  const [mode, setMode] = useState<Mode>('magic');
+  const [mode, setMode] = useState<Mode>('password');
   const [step, setStep] = useState<Step>('form');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -108,8 +110,14 @@ function SignupForm() {
     <div className="max-w-sm w-full space-y-6">
       <div className="text-center">
         <h1 className="text-2xl font-bold">Create your account</h1>
-        <p className="text-sm text-gray-400 mt-1">Start building paid AI APIs in MPP Studio</p>
+        <p className="text-sm text-gray-400 mt-1">Create your MPP Studio account with email and password</p>
       </div>
+
+      {authBypassEnabled && (
+        <div className="rounded-lg border border-amber-700/30 bg-amber-950/20 p-4 text-sm text-amber-200">
+          Local auth bypass is enabled. You can still use signup, but for quick UI access you do not need a magic link in this environment.
+        </div>
+      )}
 
       <div className="flex rounded-lg border border-gray-800 p-1 gap-1 bg-gray-900">
         {(['magic', 'password'] as Mode[]).map((variant) => (
@@ -172,6 +180,10 @@ function SignupForm() {
       <p className="text-center text-xs text-gray-600">
         Already have an account?{' '}
         <a href="/login" className="underline hover:text-gray-400">Sign in</a>
+      </p>
+
+      <p className="text-center text-[11px] text-gray-600 leading-5">
+        Supabase must allow the exact callback origin you are using locally, including the port, such as `http://localhost:3000/callback` or `http://localhost:3001/callback`.
       </p>
     </div>
   );

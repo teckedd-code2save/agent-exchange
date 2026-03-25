@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@agent-exchange/db';
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { getCurrentActor } from '@/lib/auth';
 
 /**
  * GET /api/v1/provider/analytics
@@ -9,7 +9,7 @@ import { createSupabaseServerClient } from '@/lib/supabase';
  * Returns aggregated stats for all their services.
  */
 export async function GET() {
-  const supabase = createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser(); const userId = user?.id;
+  const { userId } = await getCurrentActor();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const provider = await prisma.provider.findUnique({ where: { userId } });

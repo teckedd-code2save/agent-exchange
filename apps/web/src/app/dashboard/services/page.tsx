@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
+import { isAuthBypassEnabled } from '@/lib/admin';
+import { getAppUrl } from '@/lib/env';
 
 type ProviderService = {
   id: string;
@@ -19,7 +21,7 @@ type ProviderService = {
 };
 
 async function getServices(cookieHeader: string): Promise<ProviderService[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const baseUrl = getAppUrl();
   const response = await fetch(`${baseUrl}/api/v1/provider/services`, {
     headers: { Cookie: cookieHeader },
     cache: 'no-store',
@@ -44,7 +46,7 @@ export default async function ServicesPage() {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!user && !isAuthBypassEnabled()) {
     redirect('/login');
   }
 
@@ -60,6 +62,9 @@ export default async function ServicesPage() {
           <p className="mt-2 max-w-2xl text-sm text-slate-400">
             Register APIs, inspect their machine-readable contract, and jump straight into the Studio tester.
           </p>
+          {!user && isAuthBypassEnabled() && (
+            <p className="mt-2 text-sm text-amber-300">Auth bypass is active. New services will be saved under the local dev provider account.</p>
+          )}
         </div>
         <Link
           href="/dashboard/services/new"

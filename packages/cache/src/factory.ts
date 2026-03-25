@@ -1,6 +1,7 @@
 import type { CacheAdapter } from './types';
 import { MemoryAdapter } from './adapters/memory';
 import { IoRedisAdapter } from './adapters/ioredis';
+import { UpstashAdapter } from './adapters/upstash';
 
 type CacheProvider = 'memory' | 'ioredis' | 'upstash';
 
@@ -28,14 +29,13 @@ export function getCacheAdapter(): CacheAdapter {
     }
 
     case 'upstash': {
-      // TODO: Phase 2 — uncomment when UpstashAdapter is implemented
-      // const url = process.env['UPSTASH_REDIS_REST_URL'];
-      // const token = process.env['UPSTASH_REDIS_REST_TOKEN'];
-      // if (!url || !token) {
-      //   throw new Error('[cache] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN required');
-      // }
-      // instance = new UpstashAdapter(url, token);
-      throw new Error('[cache] Upstash adapter is deferred to Phase 2. Use memory or ioredis.');
+      const url = process.env['UPSTASH_REDIS_REST_URL'];
+      const token = process.env['UPSTASH_REDIS_REST_TOKEN'];
+      if (!url || !token) {
+        throw new Error('[cache] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN required');
+      }
+      instance = new UpstashAdapter(url, token);
+      break;
     }
 
     default:

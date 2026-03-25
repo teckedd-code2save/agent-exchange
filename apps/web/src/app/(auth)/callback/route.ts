@@ -2,6 +2,13 @@ import { type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { getSupabaseBrowserKey } from '@/lib/env';
+
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: Record<string, unknown>;
+};
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -11,17 +18,16 @@ export async function GET(req: NextRequest) {
     const cookieStore = cookies();
     const supabase = createServerClient(
       process.env['NEXT_PUBLIC_SUPABASE_URL']!,
-      process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY']!,
+      getSupabaseBrowserKey(),
       {
         cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
+          getAll() {
+            return cookieStore.getAll();
           },
-          set(name: string, value: string, options: Record<string, unknown>) {
-            cookieStore.set({ name, value, ...options });
-          },
-          remove(name: string, options: Record<string, unknown>) {
-            cookieStore.set({ name, value: '', ...options });
+          setAll(cookiesToSet: CookieToSet[]) {
+            cookiesToSet.forEach(({ name, value, options }: CookieToSet) => {
+              cookieStore.set({ name, value, ...options });
+            });
           },
         },
       },

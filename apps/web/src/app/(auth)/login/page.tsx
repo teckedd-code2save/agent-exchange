@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseBrowserKey } from '@/lib/env';
 
 type Mode = 'magic' | 'password';
 type Step = 'form' | 'sent' | 'loading';
@@ -10,7 +11,7 @@ type Step = 'form' | 'sent' | 'loading';
 function getSupabase() {
   return createBrowserClient(
     process.env['NEXT_PUBLIC_SUPABASE_URL']!,
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY']!,
+    getSupabaseBrowserKey(),
   );
 }
 
@@ -26,8 +27,9 @@ function Spinner() {
 function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get('next') ?? '/dashboard';
+  const authBypassEnabled = process.env['NEXT_PUBLIC_AUTH_BYPASS'] === 'true';
 
-  const [mode, setMode]   = useState<Mode>('magic');
+  const [mode, setMode]   = useState<Mode>('password');
   const [step, setStep]   = useState<Step>('form');
   const [email, setEmail] = useState('');
   const [pass,  setPass]  = useState('');
@@ -56,7 +58,15 @@ function LoginForm() {
     setError('');
     setStep('loading');
     const { error: err } = await getSupabase().auth.signInWithPassword({ email, password: pass });
-    if (err) { setError(err.message); setStep('form'); return; }
+    if (err) {
+      const friendlyError =
+        err.message.toLowerCase().includes('invalid login credentials')
+          ? 'Invalid email or password. If this account was created earlier with magic link, reset the password first.'
+          : err.message;
+      setError(friendlyError);
+      setStep('form');
+      return;
+    }
     window.location.href = next;
   }
 
@@ -84,8 +94,22 @@ function LoginForm() {
     <div className="max-w-sm w-full space-y-6">
       <div className="text-center">
         <h1 className="text-2xl font-bold">Sign in</h1>
-        <p className="text-sm text-gray-400 mt-1">Access your MPP Studio workspace</p>
+        <p className="text-sm text-gray-400 mt-1">Access your MPP Studio workspace with email and password</p>
       </div>
+
+      {authBypassEnabled && (
+        <div className="rounded-lg border border-amber-700/30 bg-amber-950/20 p-4 text-sm text-amber-200">
+          Local auth bypass is enabled in this environment.
+          <div className="mt-3">
+            <a
+              href={next}
+              className="inline-flex rounded-full bg-amber-300 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:bg-amber-200"
+            >
+              Continue without email
+            </a>
+          </div>
+        </div>
+      )}
 
       <div className="flex rounded-lg border border-gray-800 p-1 gap-1 bg-gray-900">
         {(['magic', 'password'] as Mode[]).map((m) => (
@@ -144,6 +168,16 @@ function LoginForm() {
       <p className="text-center text-xs text-gray-600">
         No account yet?{' '}
         <a href="/signup" className="underline hover:text-gray-400">Create one free</a>
+      </p>
+
+      <p className="text-center text-xs text-gray-600">
+        Password not working?{' '}
+        <a href="/forgot-password" className="underline hover:text-gray-400">Reset it</a>
+      </p>
+
+      <p className="text-center text-[11px] text-gray-600 leading-5">
+        If magic links still fail, make sure Supabase allows the exact callback URL for your current local origin,
+        for example `http://localhost:3000/callback` or `http://localhost:3001/callback`.
       </p>
     </div>
   );

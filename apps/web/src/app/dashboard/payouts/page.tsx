@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@agent-exchange/db';
 import { createSupabaseServerClient } from '@/lib/supabase';
+import { isAuthBypassEnabled } from '@/lib/admin';
 
 async function getBalances(userId: string) {
   return prisma.provider.findUnique({
@@ -19,11 +20,11 @@ export default async function PayoutsPage() {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!user && !isAuthBypassEnabled()) {
     redirect('/login');
   }
 
-  const provider = await getBalances(user.id);
+  const provider = user ? await getBalances(user.id) : null;
 
   return (
     <main className="mx-auto max-w-5xl space-y-6">

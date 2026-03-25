@@ -1,4 +1,8 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { createSupabaseServerClient } from '@/lib/supabase';
+import { isAuthBypassEnabled } from '@/lib/admin';
+import { getAppUrl } from '@/lib/env';
 
 type ServiceContract = {
   id: string;
@@ -29,7 +33,7 @@ type ServiceContract = {
 };
 
 async function getContract(slug: string): Promise<ServiceContract | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const baseUrl = getAppUrl();
   const response = await fetch(`${baseUrl}/api/v1/services/${slug}`, { cache: 'no-store' });
   if (!response.ok) {
     return null;
@@ -38,6 +42,13 @@ async function getContract(slug: string): Promise<ServiceContract | null> {
 }
 
 export default async function ServiceDetailPage({ params }: { params: { slug: string } }) {
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user && !isAuthBypassEnabled()) {
+    redirect('/login');
+  }
+
   const contract = await getContract(params.slug);
 
   if (!contract) {

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@agent-exchange/db';
 import { createSupabaseServerClient } from '@/lib/supabase';
+import { isAuthBypassEnabled } from '@/lib/admin';
 
 async function getRecentCalls(userId: string) {
   const provider = await prisma.provider.findUnique({
@@ -43,11 +44,11 @@ export default async function TransactionsPage() {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!user && !isAuthBypassEnabled()) {
     redirect('/login');
   }
 
-  const calls = await getRecentCalls(user.id);
+  const calls = user ? await getRecentCalls(user.id) : [];
 
   return (
     <main className="mx-auto max-w-6xl space-y-6">

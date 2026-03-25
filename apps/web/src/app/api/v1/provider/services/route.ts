@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@agent-exchange/db';
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { getCurrentActor } from '@/lib/auth';
 
 /**
  * POST /api/v1/provider/services — Register a new service
@@ -8,7 +8,7 @@ import { createSupabaseServerClient } from '@/lib/supabase';
  */
 
 export async function GET() {
-  const supabase = createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser(); const userId = user?.id;
+  const { userId } = await getCurrentActor();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const provider = await prisma.provider.findUnique({ where: { userId } });
@@ -26,7 +26,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser(); const userId = user?.id;
+  const { userId, email, isBypass } = await getCurrentActor();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     update: {},
     create: {
       userId,
-      email: body.email ?? `${userId}@mpp.studio`,
+      email: body.email ?? email ?? `${userId}@mpp.studio`,
     },
   });
 
@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
     service,
     sandboxEndpoint: `${request.nextUrl.origin}/api/v1/proxy/${slug}`,
     message: '🎉 Service registered! Test it in sandbox mode using the sandboxEndpoint.',
+    authMode: isBypass ? 'bypass' : 'supabase',
     nextSteps: [
       '1. Make a POST request to sandboxEndpoint — you\'ll get a 402 challenge',
       '2. Resend with Authorization: Payment sandbox-credential',

@@ -85,6 +85,7 @@ function GatewayTesterInner() {
   const [resultFinal, setResultFinal] = useState<FlowResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [log, setLog] = useState<string[]>([]);
+  const [origin, setOrigin] = useState('http://localhost:3000');
 
   const appendLog = useCallback((message: string) => {
     setLog((current) => [...current, `${new Date().toISOString().slice(11, 19)}  ${message}`]);
@@ -92,6 +93,9 @@ function GatewayTesterInner() {
 
   useEffect(() => {
     setWallet(getActiveWallet());
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
     fetch('/api/v1/provider/services')
       .then((response) => response.json())
       .then((payload: { results?: ServiceSummary[] }) => {
@@ -324,7 +328,7 @@ function GatewayTesterInner() {
                 <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Proxy URL</p>
                 <div className="mt-2 flex items-start gap-2">
                   <code className="flex-1 break-all text-xs text-sky-300">{proxyUrl || '/api/v1/proxy/<service>/<path>'}</code>
-                  <CopyButton text={`http://localhost:3000${proxyUrl}`} />
+                  <CopyButton text={`${origin}${proxyUrl}`} />
                 </div>
               </div>
             </div>

@@ -1,7 +1,8 @@
 import Link from 'next/link';
+import { getAppUrl } from '@/lib/env';
 
 async function getServices() {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const baseUrl = getAppUrl();
   try {
     const res = await fetch(`${baseUrl}/api/v1/discovery?env=sandbox`, {
       cache: 'no-store',

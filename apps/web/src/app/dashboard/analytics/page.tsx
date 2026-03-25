@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@agent-exchange/db';
 import { createSupabaseServerClient } from '@/lib/supabase';
+import { isAuthBypassEnabled } from '@/lib/admin';
 
 async function getAnalytics(userId: string) {
   const provider = await prisma.provider.findUnique({
@@ -67,11 +68,11 @@ export default async function AnalyticsPage() {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!user && !isAuthBypassEnabled()) {
     redirect('/login');
   }
 
-  const analytics = await getAnalytics(user.id);
+  const analytics = user ? await getAnalytics(user.id) : null;
 
   if (!analytics) {
     return (
