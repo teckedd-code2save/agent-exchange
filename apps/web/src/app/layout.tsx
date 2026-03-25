@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Agent Exchange — AI Agent Marketplace',
-  description: 'Discover and pay for third-party services as an autonomous AI agent',
+  title: 'MPP Studio',
+  description: 'Build, test, and launch paid AI services with sandbox, discovery, and machine-payment workflows.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

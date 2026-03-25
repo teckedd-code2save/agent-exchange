@@ -27,8 +27,21 @@ type TempoTransferResponse = {
   confirmedAt: string;
 };
 
+type TempoSdkModule = {
+  TempoClient: new (options: { apiKey: string }) => {
+    getTransaction(txHash: string): Promise<TempoTransaction>;
+    transfer(payload: {
+      from: string;
+      to: string;
+      amount: string;
+      memo?: string;
+    }): Promise<TempoTransferResponse>;
+  };
+};
+
 async function loadTempoClient() {
-  const { TempoClient } = await import('@mppx/sdk');
+  const sdkSpecifier = '@mppx/sdk';
+  const { TempoClient } = await import(sdkSpecifier) as TempoSdkModule;
   const apiKey = process.env['TEMPO_API_KEY'];
   if (!apiKey) {
     throw new Error('[payments:tempo] TEMPO_API_KEY must be set to call Tempo SDK');

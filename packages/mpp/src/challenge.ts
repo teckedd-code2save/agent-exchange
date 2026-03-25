@@ -5,7 +5,6 @@ import type { CacheAdapter } from '@agent-exchange/cache';
 import { CacheKeys } from '@agent-exchange/cache';
 import type { ChallengeResult, PaymentMethod, PaymentIntent, StripePaymentDetails } from './types';
 
-// Stripe minimum charge is 50 cents
 const STRIPE_MIN_CENTS = 50;
 
 export interface IssueChallengeParams {
@@ -19,6 +18,16 @@ export interface IssueChallengeParams {
   cache: CacheAdapter;
 }
 
+interface CachedChallenge {
+  endpointPath: string;
+  paymentMethods: PaymentMethod[];
+  amount: string;
+  currency: string;
+  intent: PaymentIntent;
+  expiresAt: string;
+  digest?: string;
+}
+
 export async function issueChallenge(params: IssueChallengeParams): Promise<ChallengeResult> {
   const {
     endpointPath,
@@ -27,50 +36,41 @@ export async function issueChallenge(params: IssueChallengeParams): Promise<Chal
     currency,
     digest,
     intent = 'charge',
-    db,
     cache,
   } = params;
 
-  const challengeId = 'ch_' + randomBytes(8).toString('hex');
+  const challengeId = `ch_${randomBytes(8).toString('hex')}`;
   const ttlSeconds = parseInt(process.env['MPP_CHALLENGE_TTL_SECONDS'] ?? '300', 10);
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+  const primaryMethod = paymentMethods[0] ?? 'sandbox';
 
-  // Write to Postgres (one challenge per primary payment method)
-  const primaryMethod = paymentMethods[0] ?? 'tempo';
-  await db.mppChallenge.create({
-    data: {
-      challengeId,
-      endpointPath,
-      paymentMethod: primaryMethod,
-      intent,
-      amount,
-      currency,
-      digest,
-      expiresAt,
-    },
-  });
+  const cachedChallenge: CachedChallenge = {
+    endpointPath,
+    paymentMethods,
+    amount,
+    currency,
+    intent,
+    expiresAt: expiresAt.toISOString(),
+    digest,
+  };
 
-  // Write to cache for fast lookup
   await cache.set(
     CacheKeys.mppChallenge(challengeId),
-    JSON.stringify({ endpointPath, paymentMethods, amount, currency, intent, expiresAt }),
+    JSON.stringify(cachedChallenge),
     ttlSeconds,
   );
 
-  // Build WWW-Authenticate headers — one per payment method
   const wwwAuthenticate = paymentMethods.map((method) => {
-    const params = [
+    const parts = [
       `challenge="${challengeId}"`,
       `method="${method}"`,
       `amount="${amount}"`,
       `currency="${currency}"`,
       `expires="${expiresAt.toISOString()}"`,
-    ].join(', ');
-    return `Payment ${params}`;
+    ];
+    return `Payment ${parts.join(', ')}`;
   });
 
-  // If stripe is in the payment methods, create a PaymentIntent now so the
-  // agent can complete payment before retrying with the credential.
   let stripeDetails: StripePaymentDetails | undefined;
   if (paymentMethods.includes('stripe') && process.env['STRIPE_SECRET_KEY']) {
     try {
@@ -85,25 +85,26 @@ export async function issueChallenge(params: IssueChallengeParams): Promise<Chal
         payment_method_types: ['card'],
         metadata: { challengeId, endpointPath, agentExchange: 'true' },
       });
-      stripeDetails = {
-        paymentIntentId: pi.id,
-        clientSecret: pi.client_secret!,
-        amountCents,
-        currency: 'usd',
-      };
+      if (pi.client_secret) {
+        stripeDetails = {
+          paymentIntentId: pi.id,
+          clientSecret: pi.client_secret,
+          amountCents,
+          currency: 'usd',
+        };
+      }
     } catch (err) {
       console.error('[mpp:challenge] Failed to create Stripe PaymentIntent:', err);
-      // Non-fatal — stripe just won't be available for this challenge
     }
   }
 
   const body = {
-    type: 'https://agentexchange.dev/problems/payment-required',
+    type: 'https://mpp.studio/problems/payment-required',
     title: 'Payment Required',
     status: 402,
-    detail: `Access to ${endpointPath} requires payment. Provide credentials via Authorization: Payment header.`,
+    detail: `Access to ${endpointPath} requires payment.`,
     challengeId,
-    paymentMethods,
+    paymentMethods: [primaryMethod, ...paymentMethods.filter((method) => method !== primaryMethod)],
     ...(stripeDetails ? { stripe: stripeDetails } : {}),
   };
 

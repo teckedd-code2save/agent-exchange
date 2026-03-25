@@ -1,663 +1,435 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface ServiceSummary {
-  slug: string;
+type ServiceSummary = {
+  id: string;
+  studioSlug: string;
   name: string;
   status: string;
-  endpoints?: EndpointSummary[];
-}
+  description: string;
+  pricingType: string;
+  pricingConfig?: { amount?: string; currency?: string } | null;
+  supportedPayments: string[];
+};
 
-interface EndpointSummary {
-  id: string;
-  path: string;
-  method: string;
-  name: string;
-  pricing?: PricingSummary[];
-}
+type FlowStep = 'idle' | 'challenging' | 'challenged' | 'paying' | 'done' | 'error';
 
-interface PricingSummary {
-  amount: string;
-  currency: string;
-  pricingModel: string;
-}
+type FlowResult = {
+  status: number;
+  body: string;
+  durationMs: number;
+  receipt: string | null;
+};
 
-type FlowStep = 'idle' | 'challenging' | 'challenged' | 'stripe-pay' | 'stripe-paying' | 'paying' | 'done' | 'error';
-
-interface StripeDetails {
-  paymentIntentId: string;
-  clientSecret: string;
-  amountCents: number;
-  currency: string;
-}
-
-interface Challenge {
+type Challenge = {
+  rawHeader: string;
   challengeId: string;
   method: string;
   amount: string;
   currency: string;
-  expires: string;
-  rawHeader: string;
-  stripe?: StripeDetails;
+};
+
+function getActiveWallet() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  return localStorage.getItem('ax_active_wallet') ?? 'agent:0xTEST000000000000000000000000000001';
 }
 
-interface FlowResult {
-  status: number;
-  txId: string | null;
-  body: string;
-  durationMs: number;
-}
+function parseWwwAuthenticate(header: string): Challenge | null {
+  const read = (key: string) => new RegExp(`${key}="([^"]+)"`).exec(header)?.[1];
+  const challengeId = read('challenge');
+  const method = read('methods') ?? read('method');
+  const amount = read('amount');
+  const currency = read('currency') ?? 'USDC';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+  if (!challengeId || !method || !amount) {
+    return null;
+  }
 
-function base64url(obj: unknown): string {
-  return Buffer.from(JSON.stringify(obj))
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-}
-
-function parseWwwAuth(header: string): Omit<Challenge, 'rawHeader'> | null {
-  const get = (key: string) => new RegExp(`${key}="([^"]+)"`).exec(header)?.[1];
-  const challengeId = get('challenge');
-  const method      = get('method');
-  const amount      = get('amount');
-  const currency    = get('currency') ?? 'USDC';
-  const expires     = get('expires') ?? '';
-  if (!challengeId || !method || !amount) return null;
-  return { challengeId, method, amount, currency, expires };
-}
-
-function mintCredential(challenge: Challenge, wallet: string, proof?: string): string {
-  const payload = {
-    challengeId:        challenge.challengeId,
-    paymentMethod:      challenge.method,
-    agentWalletAddress: wallet,
-    proof:              proof ?? `test_proof_${Date.now()}`,
-  };
-  return `Payment ${base64url(payload)}`;
-}
-
-function getActiveWallet(): string {
-  if (typeof window === 'undefined') return '';
-  return (
-    localStorage.getItem('ax_active_wallet') ??
-    'agent:0xTEST000000000000000000000000000001'
-  );
-}
-
-function StatusBadge({ status }: { status: number }) {
-  const cls =
-    status >= 200 && status < 300 ? 'bg-green-900/40 text-green-400 border-green-800/40' :
-    status === 402                 ? 'bg-yellow-900/40 text-yellow-400 border-yellow-800/40' :
-    status === 401                 ? 'bg-red-900/40 text-red-400 border-red-800/40' :
-    status >= 500                  ? 'bg-orange-900/40 text-orange-400 border-orange-800/40' :
-                                     'bg-gray-800 text-gray-400 border-gray-700';
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-mono font-bold ${cls}`}>
-      {status}
-    </span>
-  );
+  return { rawHeader: header, challengeId, method, amount, currency };
 }
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+
   return (
     <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-      className="text-xs text-gray-500 hover:text-gray-300 transition-colors shrink-0"
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      }}
+      className="text-xs text-slate-500 transition hover:text-slate-200"
     >
-      {copied ? '✓ Copied' : 'Copy'}
+      {copied ? 'Copied' : 'Copy'}
     </button>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
-function GatewayTestInner() {
+function GatewayTesterInner() {
   const searchParams = useSearchParams();
-  const preselect = searchParams.get('service') ?? '';
+  const preselectedService = searchParams.get('service') ?? '';
 
-  const [services,        setServices]       = useState<ServiceSummary[]>([]);
-  const [selectedSlug,    setSelectedSlug]   = useState(preselect);
-  const [selectedEp,      setSelectedEp]     = useState('');
-  const [wallet,          setWallet]         = useState('');
-  const [reqMethod,       setReqMethod]      = useState('GET');
-  const [reqBody,         setReqBody]        = useState('');
-  const [extraHeaders,    setExtraHeaders]   = useState('');
+  const [services, setServices] = useState<ServiceSummary[]>([]);
+  const [selectedSlug, setSelectedSlug] = useState(preselectedService);
+  const [requestPath, setRequestPath] = useState('/reflect');
+  const [requestMethod, setRequestMethod] = useState('POST');
+  const [requestBody, setRequestBody] = useState('{\n  "input": "hello from MPP Studio"\n}');
+  const [wallet, setWallet] = useState('');
+  const [step, setStep] = useState<FlowStep>('idle');
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [result402, setResult402] = useState<FlowResult | null>(null);
+  const [resultFinal, setResultFinal] = useState<FlowResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [log, setLog] = useState<string[]>([]);
 
-  const [step,            setStep]           = useState<FlowStep>('idle');
-  const [challenge,       setChallenge]      = useState<Challenge | null>(null);
-  const [credential,      setCredential]     = useState('');
-  const [result402,       setResult402]      = useState<FlowResult | null>(null);
-  const [result200,       setResult200]      = useState<FlowResult | null>(null);
-  const [errorMsg,        setErrorMsg]       = useState('');
-  const [log,             setLog]            = useState<string[]>([]);
-  const [stripeConfirmed, setStripeConfirmed] = useState(false);
-
-  const appendLog = (msg: string) => setLog((prev) => [...prev, `${new Date().toISOString().slice(11, 23)}  ${msg}`]);
-
-  // Load services
-  useEffect(() => {
-    setWallet(getActiveWallet());
-    fetch('/api/v1/services?limit=50')
-      .then((r) => r.json())
-      .then((d: { data: ServiceSummary[] }) => {
-        const active = d.data.filter((s) => s.status === 'active');
-        setServices(active);
-        // Use preselected slug if valid, else fall back to first
-        const match = preselect && active.find((s) => s.slug === preselect);
-        if (!selectedSlug || !match) {
-          setSelectedSlug(match ? preselect : (active[0]?.slug ?? ''));
-        }
-      })
-      .catch(() => appendLog('ERROR: could not load services'));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const appendLog = useCallback((message: string) => {
+    setLog((current) => [...current, `${new Date().toISOString().slice(11, 19)}  ${message}`]);
   }, []);
 
-  // Load endpoints when service changes
-  const currentService = services.find((s) => s.slug === selectedSlug);
   useEffect(() => {
-    if (!selectedSlug) return;
-    fetch(`/api/v1/services/${selectedSlug}`)
-      .then((r) => r.json())
-      .then((d: ServiceSummary) => {
-        setServices((prev) =>
-          prev.map((s) => (s.slug === selectedSlug ? { ...s, endpoints: d.endpoints } : s))
-        );
-        const firstPath = d.endpoints?.[0]?.path ?? '';
-        setSelectedEp(firstPath);
+    setWallet(getActiveWallet());
+    fetch('/api/v1/provider/services')
+      .then((response) => response.json())
+      .then((payload: { results?: ServiceSummary[] }) => {
+        const results = payload.results ?? [];
+        setServices(results);
+        const chosen = preselectedService
+          ? results.find((service) => service.studioSlug === preselectedService)
+          : undefined;
+        setSelectedSlug(chosen?.studioSlug ?? results[0]?.studioSlug ?? '');
       })
-      .catch(() => {});
-  }, [selectedSlug]);
+      .catch(() => appendLog('Failed to load provider services'));
+  }, [appendLog, preselectedService]);
 
-  const endpoints = currentService?.endpoints ?? [];
-  const currentEp = endpoints.find((e) => e.path === selectedEp);
-  const pricing   = currentEp?.pricing?.[0];
+  const currentService = useMemo(
+    () => services.find((service) => service.studioSlug === selectedSlug) ?? null,
+    [selectedSlug, services],
+  );
 
-  const gatewayUrl = selectedSlug && selectedEp
-    ? `/api/v1/gateway/${selectedSlug}${selectedEp}`
-    : '';
+  const proxyUrl = useMemo(() => {
+    if (!selectedSlug) {
+      return '';
+    }
+    const normalizedPath = requestPath.startsWith('/') ? requestPath : `/${requestPath}`;
+    return `/api/v1/proxy/${selectedSlug}${normalizedPath}`;
+  }, [requestPath, selectedSlug]);
 
-  function reset() {
+  function resetFlow() {
     setStep('idle');
     setChallenge(null);
-    setCredential('');
     setResult402(null);
-    setResult200(null);
-    setErrorMsg('');
+    setResultFinal(null);
+    setErrorMessage('');
     setLog([]);
-    setStripeConfirmed(false);
   }
 
-  // Step 1: Hit endpoint without auth → get 402
   const getChallenge = useCallback(async () => {
-    if (!gatewayUrl) return;
-    reset();
+    if (!proxyUrl) {
+      return;
+    }
+
+    resetFlow();
     setStep('challenging');
-    appendLog(`→ ${reqMethod} ${gatewayUrl}`);
-    const t0 = Date.now();
-    try {
-      const resp = await fetch(gatewayUrl, { method: reqMethod });
-      const ms = Date.now() - t0;
-      const body = await resp.text();
-      appendLog(`← ${resp.status} (${ms}ms)`);
-
-      if (resp.status !== 402) {
-        setErrorMsg(`Expected 402, got ${resp.status}. ${resp.status === 404 ? 'Check the service is active and endpoint is registered.' : ''}`);
-        setResult402({ status: resp.status, txId: null, body, durationMs: ms });
-        setStep('error');
-        return;
-      }
-
-      const wwwAuth = resp.headers.get('www-authenticate') ?? '';
-      appendLog(`  WWW-Authenticate: ${wwwAuth.slice(0, 80)}...`);
-      const parsed = parseWwwAuth(wwwAuth);
-      if (!parsed) { setErrorMsg('Could not parse WWW-Authenticate header'); setStep('error'); return; }
-
-      // Extract Stripe details from 402 body if present
-      let stripeDetails: StripeDetails | undefined;
-      try {
-        const bodyJson = JSON.parse(body) as { stripe?: StripeDetails };
-        if (bodyJson.stripe?.clientSecret) stripeDetails = bodyJson.stripe;
-      } catch { /* non-json body */ }
-
-      const ch: Challenge = { ...parsed, rawHeader: wwwAuth, stripe: stripeDetails };
-      setChallenge(ch);
-      setResult402({ status: 402, txId: null, body, durationMs: ms });
-
-      appendLog(`  Challenge: ${ch.challengeId}`);
-      appendLog(`  Amount: ${ch.amount} ${ch.currency}  Method: ${ch.method}`);
-
-      if (ch.method === 'stripe' && stripeDetails) {
-        appendLog(`  Stripe PaymentIntent: ${stripeDetails.paymentIntentId}`);
-        appendLog(`  → Complete payment in Step 1.5 before hitting Pay & Call`);
-        setStep('stripe-pay');
-      } else {
-        const cred = mintCredential(ch, wallet);
-        setCredential(cred);
-        appendLog(`  Credential minted (stub proof)`);
-        setStep('challenged');
-      }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-      setStep('error');
-    }
-  }, [gatewayUrl, reqMethod, wallet]);
-
-  // Step 2: Replay with credential → get 200/502
-  const sendPayment = useCallback(async () => {
-    if (!challenge || !credential) return;
-    setStep('paying');
-    appendLog(`→ ${reqMethod} ${gatewayUrl}  [with credential]`);
-    const t0 = Date.now();
-
-    // Parse extra headers
-    const extraHdr: Record<string, string> = {};
-    extraHeaders.split('\n').forEach((line) => {
-      const idx = line.indexOf(':');
-      if (idx > 0) {
-        const k = line.slice(0, idx).trim();
-        const v = line.slice(idx + 1).trim();
-        if (k) extraHdr[k] = v;
-      }
-    });
+    appendLog(`→ ${requestMethod} ${proxyUrl}`);
 
     try {
-      const resp = await fetch(gatewayUrl, {
-        method: reqMethod,
-        headers: {
-          Authorization: credential,
-          'Content-Type': 'application/json',
-          ...extraHdr,
-        },
-        body: ['GET', 'HEAD'].includes(reqMethod) ? undefined : (reqBody || undefined),
+      const startedAt = Date.now();
+      const response = await fetch(proxyUrl, {
+        method: requestMethod,
+        headers: ['GET', 'HEAD'].includes(requestMethod) ? undefined : { 'Content-Type': 'application/json' },
+        body: ['GET', 'HEAD'].includes(requestMethod) ? undefined : requestBody,
       });
-      const ms = Date.now() - t0;
-      const body = await resp.text();
-      const txId = resp.headers.get('x-agent-exchange-tx');
-      appendLog(`← ${resp.status} (${ms}ms)${txId ? `  tx=${txId}` : ''}`);
+      const durationMs = Date.now() - startedAt;
+      const body = await response.text();
+      appendLog(`← ${response.status} (${durationMs}ms)`);
 
-      setResult200({ status: resp.status, txId, body, durationMs: ms });
-      setStep('done');
-
-      if (resp.status === 401) {
-        const parsed = JSON.parse(body) as { detail?: string };
-        setErrorMsg('Credential rejected: ' + (parsed.detail ?? body));
-        setStep('error');
-      }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-      setStep('error');
-    }
-  }, [challenge, credential, gatewayUrl, reqMethod, reqBody, extraHeaders]);
-
-  // Step 1.5: Confirm Stripe payment using test card via Stripe.js
-  const confirmStripePayment = useCallback(async () => {
-    if (!challenge?.stripe) return;
-    setStep('stripe-paying');
-    appendLog(`  Confirming Stripe payment (test card 4242...)`);
-    try {
-      const stripeKey = process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
-      if (!stripeKey || stripeKey === 'pk_test_...') {
-        setErrorMsg('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY not set in .env.local — add your Stripe test key');
-        setStep('error');
-        return;
-      }
-      const { loadStripe } = await import('@stripe/stripe-js');
-      const stripe = await loadStripe(stripeKey);
-      if (!stripe) { setErrorMsg('Failed to load Stripe.js'); setStep('error'); return; }
-
-      const { error, paymentIntent } = await stripe.confirmCardPayment(
-        challenge.stripe.clientSecret,
-        { payment_method: { card: { token: 'tok_visa' } } },
-      );
-
-      if (error) {
-        appendLog(`  Stripe error: ${error.message ?? 'unknown'}`);
-        setErrorMsg(`Stripe payment failed: ${error.message ?? 'unknown'}`);
+      if (response.status !== 402) {
+        setErrorMessage(`Expected a 402 challenge, got ${response.status}.`);
+        setResult402({ status: response.status, body, durationMs, receipt: null });
         setStep('error');
         return;
       }
 
-      appendLog(`  Stripe payment succeeded: ${paymentIntent?.id}`);
-      setStripeConfirmed(true);
-      // Mint credential with the PaymentIntent ID as the proof
-      const cred = mintCredential(challenge, wallet, paymentIntent?.id);
-      setCredential(cred);
-      appendLog(`  Credential minted with proof=${paymentIntent?.id}`);
+      const header = response.headers.get('www-authenticate') ?? '';
+      const parsed = parseWwwAuthenticate(header);
+      if (!parsed) {
+        setErrorMessage('Could not parse the WWW-Authenticate header.');
+        setStep('error');
+        return;
+      }
+
+      setChallenge(parsed);
+      setResult402({ status: response.status, body, durationMs, receipt: null });
       setStep('challenged');
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      appendLog(`Challenge ${parsed.challengeId} for ${parsed.amount} ${parsed.currency} via ${parsed.method}`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
       setStep('error');
     }
-  }, [challenge, wallet]);
+  }, [appendLog, proxyUrl, requestBody, requestMethod]);
 
-  const isLoading = step === 'challenging' || step === 'paying' || step === 'stripe-paying';
+  const sendPaidRequest = useCallback(async () => {
+    if (!proxyUrl || !challenge) {
+      return;
+    }
+
+    setStep('paying');
+    appendLog(`→ ${requestMethod} ${proxyUrl} [paid]`);
+
+    try {
+      const startedAt = Date.now();
+      const response = await fetch(proxyUrl, {
+        method: requestMethod,
+        headers: {
+          Authorization: currentService?.status === 'sandbox' ? 'Payment sandbox-credential' : `Payment ${challenge.challengeId}`,
+          'Content-Type': 'application/json',
+          'x-agent-wallet': wallet,
+        },
+        body: ['GET', 'HEAD'].includes(requestMethod) ? undefined : requestBody,
+      });
+      const durationMs = Date.now() - startedAt;
+      const body = await response.text();
+      const receipt = response.headers.get('payment-receipt');
+
+      appendLog(`← ${response.status} (${durationMs}ms)`);
+      setResultFinal({ status: response.status, body, durationMs, receipt });
+
+      if (!response.ok) {
+        setErrorMessage(`Paid request returned ${response.status}.`);
+        setStep('error');
+        return;
+      }
+
+      setStep('done');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+      setStep('error');
+    }
+  }, [appendLog, challenge, currentService?.status, proxyUrl, requestBody, requestMethod, wallet]);
+
+  const pricingLabel = currentService?.pricingConfig
+    ? `${currentService.pricingConfig.amount ?? '0.01'} ${currentService.pricingConfig.currency ?? 'USDC'}`
+    : '0.01 USDC';
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Gateway Tester</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Test the MPP 402 payment flow interactively — select a service endpoint, get a challenge, pay, and see the proxied response.
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-300">Proxy Tester</p>
+        <h1 className="mt-2 text-3xl font-bold text-white">Run the Studio payment loop</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
+          Pick one of your services, hit the Studio proxy, inspect the 402 challenge, then replay the call with a sandbox credential. This is the fastest way to verify that your API and the Studio proxy agree on the contract.
         </p>
       </div>
 
-      {/* Config panel */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Left: service + endpoint */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-300">Service &amp; Endpoint</h2>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Service</label>
-            <select
-              value={selectedSlug}
-              onChange={(e) => { setSelectedSlug(e.target.value); reset(); }}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {services.length === 0 && <option value="">Loading...</option>}
-              {services.map((s) => (
-                <option key={s.slug} value={s.slug}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Endpoint</label>
-            <select
-              value={selectedEp}
-              onChange={(e) => { setSelectedEp(e.target.value); reset(); }}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              disabled={endpoints.length === 0}
-            >
-              {endpoints.length === 0 && <option value="">No endpoints</option>}
-              {endpoints.map((ep) => (
-                <option key={ep.id} value={ep.path}>{ep.path}  ({ep.method})</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">HTTP Method</label>
-            <select
-              value={reqMethod}
-              onChange={(e) => setReqMethod(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Right: wallet + pricing */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-300">Payment Config</h2>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Agent wallet address</label>
-            <input
-              value={wallet}
-              onChange={(e) => setWallet(e.target.value)}
-              placeholder="agent:0x..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <p className="text-xs text-gray-600 mt-1">
-              <a href="/dashboard/wallet" className="underline hover:text-gray-400">Manage wallets →</a>
-            </p>
-          </div>
-          {pricing && (
-            <div className="pt-2 border-t border-gray-800">
-              <p className="text-xs text-gray-500 mb-1">Endpoint pricing</p>
-              <p className="text-lg font-bold text-white">
-                {pricing.amount} <span className="text-sm font-normal text-gray-400">{pricing.currency}</span>
-              </p>
-              <p className="text-xs text-gray-500">{pricing.pricingModel} · 10% exchange fee</p>
-            </div>
-          )}
-          {!pricing && currentEp && (
-            <div className="pt-2 border-t border-gray-800">
-              <p className="text-xs text-gray-500">No pricing configured for this endpoint.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Request body + extra headers (collapsible) */}
-      {!['GET', 'HEAD'].includes(reqMethod) && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-300">Request Body (JSON)</h2>
-          <textarea
-            value={reqBody}
-            onChange={(e) => setReqBody(e.target.value)}
-            rows={4}
-            placeholder='{"key": "value"}'
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-          />
-        </div>
-      )}
-
-      {/* Gateway URL */}
-      {gatewayUrl && (
-        <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5">
-          <span className="text-xs font-mono text-indigo-300 font-semibold shrink-0">{reqMethod}</span>
-          <code className="text-xs font-mono text-gray-300 flex-1 break-all">{gatewayUrl}</code>
-          <CopyButton text={`http://localhost:3000${gatewayUrl}`} />
-        </div>
-      )}
-
-      {/* Stripe payment panel — shown between Step 1 and Step 2 */}
-      {(step === 'stripe-pay' || step === 'stripe-paying' || stripeConfirmed) && challenge?.stripe && (
-        <div className={`border rounded-xl p-5 space-y-4 ${stripeConfirmed ? 'bg-green-900/10 border-green-800/40' : 'bg-yellow-900/10 border-yellow-700/40'}`}>
-          <div className="flex items-center justify-between">
+      <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Request config</h2>
+          <div className="mt-4 space-y-4">
             <div>
-              <p className="text-sm font-semibold text-yellow-300">Step 1.5 — Complete Stripe Payment</p>
-              <p className="text-xs text-gray-400 mt-0.5">Pay with a test card to get a PaymentIntent proof the gateway can verify</p>
+              <label className="mb-1.5 block text-xs text-slate-500">Service</label>
+              <select
+                value={selectedSlug}
+                onChange={(event) => {
+                  setSelectedSlug(event.target.value);
+                  resetFlow();
+                }}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                {services.length === 0 && <option value="">Loading services...</option>}
+                {services.map((service) => (
+                  <option key={service.id} value={service.studioSlug}>
+                    {service.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            {stripeConfirmed && <span className="text-xs px-2 py-1 rounded bg-green-900/40 border border-green-700/40 text-green-400 font-medium">Paid ✓</span>}
-          </div>
 
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="bg-gray-900 rounded-lg p-3">
-              <p className="text-gray-500 mb-1">PaymentIntent ID</p>
-              <div className="flex items-center gap-1">
-                <code className="text-yellow-300 font-mono truncate flex-1">{challenge.stripe.paymentIntentId}</code>
-                <CopyButton text={challenge.stripe.paymentIntentId} />
+            <div className="grid gap-4 sm:grid-cols-[0.35fr_0.65fr]">
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-500">Method</label>
+                <select
+                  value={requestMethod}
+                  onChange={(event) => setRequestMethod(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                >
+                  {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-500">Request path</label>
+                <input
+                  value={requestPath}
+                  onChange={(event) => setRequestPath(event.target.value)}
+                  placeholder="/reflect"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
               </div>
             </div>
-            <div className="bg-gray-900 rounded-lg p-3">
-              <p className="text-gray-500 mb-1">Amount</p>
-              <p className="text-white font-mono">${(challenge.stripe.amountCents / 100).toFixed(2)} {challenge.stripe.currency.toUpperCase()}</p>
-            </div>
-          </div>
 
-          <div className="bg-gray-900 rounded-lg p-3 text-xs space-y-1.5">
-            <p className="text-gray-400 font-semibold">Test card (Stripe test mode)</p>
-            <div className="font-mono text-gray-300 space-y-0.5">
-              <p>Number: <span className="text-white">4242 4242 4242 4242</span></p>
-              <p>Expiry: <span className="text-white">any future date</span>  CVC: <span className="text-white">any 3 digits</span></p>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">Agent wallet</label>
+              <input
+                value={wallet}
+                onChange={(event) => setWallet(event.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
             </div>
-          </div>
 
-          {!stripeConfirmed && (
-            <button
-              onClick={confirmStripePayment}
-              disabled={step === 'stripe-paying'}
-              className="w-full py-2.5 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              {step === 'stripe-paying' ? (
-                <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Confirming payment...</>
-              ) : 'Confirm test payment (tok_visa)'}
-            </button>
+            {!['GET', 'HEAD'].includes(requestMethod) && (
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-500">JSON body</label>
+                <textarea
+                  value={requestBody}
+                  onChange={(event) => setRequestBody(event.target.value)}
+                  rows={6}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Studio contract</h2>
+          {currentService ? (
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="text-lg font-semibold text-white">{currentService.name}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-400">{currentService.description}</p>
+              </div>
+              <dl className="space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-slate-500">Environment</dt>
+                  <dd className="text-white">{currentService.status}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-slate-500">Price</dt>
+                  <dd className="text-white">{pricingLabel}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-slate-500">Payments</dt>
+                  <dd className="text-white">{currentService.supportedPayments.join(', ')}</dd>
+                </div>
+              </dl>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Proxy URL</p>
+                <div className="mt-2 flex items-start gap-2">
+                  <code className="flex-1 break-all text-xs text-sky-300">{proxyUrl || '/api/v1/proxy/<service>/<path>'}</code>
+                  <CopyButton text={`http://localhost:3000${proxyUrl}`} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">Register a service first to use the tester.</p>
           )}
         </div>
-      )}
+      </section>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-3">
+      <section className="flex flex-wrap gap-3">
         <button
           onClick={getChallenge}
-          disabled={isLoading || !gatewayUrl}
-          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          disabled={!proxyUrl || step === 'challenging' || step === 'paying'}
+          className="rounded-full bg-sky-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {step === 'challenging' && (
-            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          )}
-          {step === 'challenging' ? 'Getting challenge...' : '1. Get Challenge (402)'}
+          {step === 'challenging' ? 'Requesting challenge...' : '1. Get challenge'}
         </button>
-
         <button
-          onClick={sendPayment}
-          disabled={isLoading || step !== 'challenged'}
-          className="px-5 py-2.5 bg-green-700 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          onClick={sendPaidRequest}
+          disabled={step !== 'challenged'}
+          className="rounded-full border border-emerald-400/40 px-5 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {step === 'paying' && (
-            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          )}
-          {step === 'paying' ? 'Paying...' : '2. Pay & Call'}
+          2. Replay with payment
         </button>
+        <button
+          onClick={resetFlow}
+          className="rounded-full border border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-slate-500 hover:bg-slate-800/70"
+        >
+          Reset
+        </button>
+      </section>
 
-        {step !== 'idle' && (
-          <button onClick={reset} className="px-4 py-2.5 text-sm text-gray-400 hover:text-gray-200 transition-colors">
-            Reset
-          </button>
-        )}
-      </div>
-
-      {/* Error banner */}
-      {step === 'error' && errorMsg && (
-        <div className="bg-red-900/20 border border-red-800/40 rounded-xl px-4 py-3 text-sm text-red-400">
-          {errorMsg}
-        </div>
+      {challenge && (
+        <section className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Challenge</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Method</p>
+              <p className="mt-2 text-lg font-semibold text-white">{challenge.method}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Amount</p>
+              <p className="mt-2 text-lg font-semibold text-white">{challenge.amount} {challenge.currency}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Credential</p>
+              <p className="mt-2 text-sm font-mono text-emerald-300">Payment sandbox-credential</p>
+            </div>
+          </div>
+          <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">WWW-Authenticate</p>
+            <p className="mt-2 break-all font-mono text-xs text-slate-300">{challenge.rawHeader}</p>
+          </div>
+        </section>
       )}
 
-      {/* Two-column results */}
-      {(result402 || result200) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* 402 response */}
-          {result402 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-400">Step 1 — Unauthenticated</span>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={result402.status} />
-                  <span className="text-xs text-gray-600">{result402.durationMs}ms</span>
-                </div>
-              </div>
-              <pre className="p-4 text-xs font-mono text-gray-300 overflow-auto max-h-56 whitespace-pre-wrap break-all">
-                {(() => { try { return JSON.stringify(JSON.parse(result402.body), null, 2); } catch { return result402.body; } })()}
-              </pre>
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">402 response</h2>
+          {result402 ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-slate-400">Status {result402.status} in {result402.durationMs}ms</p>
+              <pre className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-xs text-slate-300">{result402.body}</pre>
             </div>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">Run step 1 to capture the challenge response.</p>
           )}
+        </div>
 
-          {/* 200/502 response */}
-          {result200 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-400">Step 2 — Authenticated</span>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={result200.status} />
-                  <span className="text-xs text-gray-600">{result200.durationMs}ms</span>
-                </div>
-              </div>
-              {result200.txId && (
-                <div className="px-4 py-2 border-b border-gray-800 bg-green-900/10 flex items-center gap-2">
-                  <span className="text-xs text-green-400 font-semibold">TX recorded:</span>
-                  <code className="text-xs font-mono text-green-300 flex-1 truncate">{result200.txId}</code>
-                  <CopyButton text={result200.txId} />
+        <div className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Paid response</h2>
+          {resultFinal ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-slate-400">Status {resultFinal.status} in {resultFinal.durationMs}ms</p>
+              {resultFinal.receipt && (
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Payment receipt</p>
+                  <p className="mt-2 break-all font-mono text-xs text-emerald-200">{resultFinal.receipt}</p>
                 </div>
               )}
-              <pre className="p-4 text-xs font-mono text-gray-300 overflow-auto max-h-56 whitespace-pre-wrap break-all">
-                {(() => { try { return JSON.stringify(JSON.parse(result200.body), null, 2); } catch { return result200.body; } })()}
-              </pre>
+              <pre className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-xs text-slate-300">{resultFinal.body}</pre>
             </div>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">Replay the request with payment to see the proxied response.</p>
           )}
         </div>
-      )}
+      </section>
 
-      {/* Challenge details */}
-      {challenge && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400">Challenge Details</span>
-            <CopyButton text={challenge.rawHeader} />
-          </div>
-          <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-            {[
-              { label: 'Challenge ID', value: challenge.challengeId },
-              { label: 'Method',       value: challenge.method },
-              { label: 'Amount',       value: `${challenge.amount} ${challenge.currency}` },
-              { label: 'Expires',      value: challenge.expires ? new Date(challenge.expires).toLocaleTimeString() : '—' },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <p className="text-gray-600 mb-0.5">{label}</p>
-                <p className="font-mono text-gray-300 break-all">{value}</p>
-              </div>
-            ))}
-          </div>
-          {credential && (
-            <div className="px-4 pb-4">
-              <p className="text-xs text-gray-600 mb-1">Authorization header (minted credential):</p>
-              <div className="flex items-start gap-2 bg-gray-800 rounded-lg p-2">
-                <code className="text-xs font-mono text-indigo-300 flex-1 break-all">{credential}</code>
-                <CopyButton text={credential} />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Activity log */}
-      {log.length > 0 && (
-        <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">Activity Log</span>
-            <button onClick={() => setLog([])} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">Clear</button>
-          </div>
-          <div className="p-4 font-mono text-xs text-gray-400 space-y-0.5 max-h-48 overflow-auto">
-            {log.map((line, i) => (
-              <div key={i} className="leading-5">{line}</div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* curl snippet */}
-      {challenge && (
-        <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">curl equivalent</span>
-            <CopyButton text={`# Step 1\ncurl -i http://localhost:3000${gatewayUrl}\n\n# Step 2\ncurl -i http://localhost:3000${gatewayUrl} \\\n  -H 'Authorization: ${credential}'`} />
-          </div>
-          <pre className="p-4 text-xs font-mono text-gray-400 overflow-auto whitespace-pre-wrap">{
-`# Step 1 — get 402 challenge
-curl -i http://localhost:3000${gatewayUrl}
-
-# Step 2 — pay with credential
-curl -i http://localhost:3000${gatewayUrl} \\
-  -H 'Authorization: ${credential}'`
-          }</pre>
-        </div>
-      )}
+      <section className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Run log</h2>
+        {log.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">No events yet.</p>
+        ) : (
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-xs text-slate-300">{log.join('\n')}</pre>
+        )}
+        {errorMessage && <p className="mt-4 text-sm text-rose-300">{errorMessage}</p>}
+      </section>
     </div>
   );
 }
 
-
-export default function GatewayTestPage() {
+export default function GatewayPage() {
   return (
-    <Suspense fallback={<div className="text-gray-500 text-sm p-8">Loading...</div>}>
-      <GatewayTestInner />
+    <Suspense fallback={<div className="text-sm text-slate-500">Loading tester...</div>}>
+      <GatewayTesterInner />
     </Suspense>
   );
 }

@@ -1,27 +1,28 @@
-// MPP Studio — payments package
-// Real Tempo + Stripe payment verification will live here.
-// Currently stubbed until we integrate mppx testnet.
+import type { PaymentVerificationResult } from './types';
 
-export type PaymentEnvironment = 'sandbox' | 'testnet' | 'production'
+export {
+  getStripeClient,
+  constructWebhookEvent,
+  createPaymentIntent,
+  createOrRetrieveCustomer,
+  createSubscription,
+} from './stripe';
+export type { Stripe } from './stripe';
 
-export interface PaymentVerificationResult {
-  valid: boolean
-  amount?: string
-  currency?: string
-  error?: string
-}
+export {
+  verifyTempoPayment,
+  initiateTempoTransfer,
+  getExchangeWalletAddress,
+} from './tempo';
+export type { TempoTransferParams, TempoTransferResult } from './tempo';
+
+export type PaymentEnvironment = 'sandbox' | 'testnet' | 'production';
+export type { PaymentVerificationResult };
 
 export async function verifySandboxPayment(_credential: string): Promise<PaymentVerificationResult> {
-  // Always succeeds in sandbox — that's the point
-  return { valid: true, amount: '0.01', currency: 'USDC' }
-}
-
-export async function verifyTempoPayment(_credential: string): Promise<PaymentVerificationResult> {
-  // TODO: implement real Tempo testnet verification via mppx SDK
-  return { valid: false, error: 'Tempo verification not yet implemented' }
+  return { valid: true, amount: '0.01', currency: 'USDC' };
 }
 
 export async function verifyStripePayment(_credential: string): Promise<PaymentVerificationResult> {
-  // TODO: implement real Stripe SPT verification
-  return { valid: false, error: 'Stripe verification not yet implemented' }
+  return { valid: false, error: 'Stripe verification is handled via PaymentIntent reconciliation' };
 }

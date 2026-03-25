@@ -22,7 +22,6 @@ export function withMppAuth(
     const authHeader = req.headers.get('authorization') ?? '';
 
     if (!authHeader.toLowerCase().startsWith('payment ')) {
-      // No payment credentials — issue a challenge
       const url = new URL(req.url);
       const result = await issueChallenge({
         endpointPath: url.pathname,
@@ -34,12 +33,10 @@ export function withMppAuth(
       });
 
       const headers = new Headers({ 'Content-Type': 'application/problem+json' });
-      result.wwwAuthenticate.forEach((val) => headers.append('WWW-Authenticate', val));
-
+      result.wwwAuthenticate.forEach((value) => headers.append('WWW-Authenticate', value));
       return new Response(JSON.stringify(result.body), { status: 402, headers });
     }
 
-    // Verify credentials
     const verifyResult = await verifyCredential({
       authorizationHeader: authHeader,
       db,
@@ -47,61 +44,33 @@ export function withMppAuth(
     });
 
     if (!verifyResult.valid) {
-      const url = new URL(req.url);
-      const freshChallenge = await issueChallenge({
-        endpointPath: url.pathname,
-        paymentMethods: methods,
-        amount,
-        currency,
-        db,
-        cache,
-      });
-
-      const headers = new Headers({ 'Content-Type': 'application/problem+json' });
-      freshChallenge.wwwAuthenticate.forEach((val) => headers.append('WWW-Authenticate', val));
-
       return new Response(
         JSON.stringify({
-          type: 'https://agentexchange.dev/problems/invalid-payment-credential',
+          type: 'https://mpp.studio/problems/invalid-payment-credential',
           title: 'Invalid Payment Credential',
           status: 402,
           detail: verifyResult.error ?? 'Payment credential verification failed',
         }),
-        { status: 402, headers },
+        { status: 402, headers: { 'Content-Type': 'application/problem+json' } },
       );
     }
 
-    const mppCtx: MppContext = {
+    const response = await handler(req, {
       challengeId: verifyResult.challengeId!,
       paymentMethod: verifyResult.paymentMethod!,
       agentWalletAddress: verifyResult.agentWalletAddress!,
-    };
+    });
 
-    // Call the actual handler
-    const response = await handler(req, mppCtx);
+    const receiptHeader = await issueReceipt({
+      credentialId: verifyResult.challengeId!,
+      resourcePath: new URL(req.url).pathname,
+      amount,
+      currency,
+      db,
+    });
 
-    // Issue receipt and append header
-    try {
-      const url = new URL(req.url);
-      const credential = await db.mppCredential.findUnique({
-        where: { challengeId: verifyResult.challengeId! },
-      });
-      if (credential) {
-        const receiptHeader = await issueReceipt({
-          credentialId: credential.id,
-          resourcePath: url.pathname,
-          amount,
-          currency,
-          db,
-        });
-        const responseWithReceipt = new Response(response.body, response);
-        responseWithReceipt.headers.set('Payment-Receipt', receiptHeader);
-        return responseWithReceipt;
-      }
-    } catch (err) {
-      console.warn('[mpp] Failed to issue receipt:', err);
-    }
-
-    return response;
+    const responseWithReceipt = new Response(response.body, response);
+    responseWithReceipt.headers.set('Payment-Receipt', receiptHeader);
+    return responseWithReceipt;
   };
 }

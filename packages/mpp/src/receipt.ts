@@ -18,30 +18,15 @@ function base64urlEncode(input: string): string {
 }
 
 export async function issueReceipt(params: IssueReceiptParams): Promise<string> {
-  const { credentialId, resourcePath, amount, currency, db } = params;
+  const { credentialId, resourcePath, amount, currency } = params;
+  const issuedAt = new Date().toISOString();
 
-  const receiptId = 'rcpt_' + randomBytes(8).toString('hex');
-  const issuedAt = new Date();
-
-  await db.mppReceipt.create({
-    data: {
-      credentialId,
-      receiptId,
-      resourcePath,
-      amount,
-      currency,
-      issuedAt,
-    },
-  });
-
-  const receiptPayload = {
-    receiptId,
+  return base64urlEncode(JSON.stringify({
+    receiptId: `rcpt_${randomBytes(8).toString('hex')}`,
     credentialId,
     resourcePath,
     amount,
     currency,
-    issuedAt: issuedAt.toISOString(),
-  };
-
-  return base64urlEncode(JSON.stringify(receiptPayload));
+    issuedAt,
+  }));
 }

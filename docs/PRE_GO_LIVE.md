@@ -33,7 +33,7 @@ Supabase Auth is already bundled with your project — no extra signup needed.
 
 - [ ] Authentication → Providers → enable **Email** (already on by default)
 - [ ] Authentication → URL Configuration → set **Site URL** to your production domain
-- [ ] Add redirect URL: `https://yourdomain.com/auth/callback`
+- [ ] Add redirect URL: `https://yourdomain.com/callback`
 - [ ] Copy **SUPABASE_URL** and **SUPABASE_ANON_KEY** from Settings → API
 
 **Env vars:**

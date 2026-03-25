@@ -45,7 +45,7 @@ function LoginForm() {
     setStep('loading');
     const { error: err } = await getSupabase().auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+      options: { emailRedirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(next)}` },
     });
     if (err) { setError(err.message); setStep('form'); return; }
     setStep('sent');
@@ -84,7 +84,7 @@ function LoginForm() {
     <div className="max-w-sm w-full space-y-6">
       <div className="text-center">
         <h1 className="text-2xl font-bold">Sign in</h1>
-        <p className="text-sm text-gray-400 mt-1">Access your Agent Exchange dashboard</p>
+        <p className="text-sm text-gray-400 mt-1">Access your MPP Studio workspace</p>
       </div>
 
       <div className="flex rounded-lg border border-gray-800 p-1 gap-1 bg-gray-900">
@@ -143,7 +143,7 @@ function LoginForm() {
 
       <p className="text-center text-xs text-gray-600">
         No account yet?{' '}
-        <a href="/auth/signup" className="underline hover:text-gray-400">Create one free</a>
+        <a href="/signup" className="underline hover:text-gray-400">Create one free</a>
       </p>
     </div>
   );

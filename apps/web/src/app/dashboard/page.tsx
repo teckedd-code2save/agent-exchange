@@ -17,7 +17,7 @@ async function getAnalytics(cookieStore: string) {
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser(); const userId = user?.id;
-  if (!userId) redirect('/sign-in');
+  if (!userId) redirect('/login');
 
   const { cookies } = await import('next/headers');
   const cookieString = cookies()
@@ -30,11 +30,11 @@ export default async function DashboardPage() {
   if (!data || !data.services?.length) {
     return (
       <main className="max-w-5xl mx-auto p-8">
-        <h1 className="text-3xl font-bold mb-8">Provider Dashboard</h1>
+        <h1 className="text-3xl font-bold mb-8">Studio Overview</h1>
         <div className="bg-slate-900 rounded-xl p-12 text-center border border-slate-800">
           <h2 className="text-xl font-semibold mb-3">No Services Registered</h2>
           <p className="text-slate-400 mb-6 max-w-md mx-auto">
-            Register your first AI service to get a sandbox endpoint and start testing MPP 402 challenges.
+            Register your first paid API to get a sandbox proxy endpoint and start testing the Studio payment loop.
           </p>
           <Link
             href="/dashboard/services/new"
@@ -50,7 +50,7 @@ export default async function DashboardPage() {
   return (
     <main className="max-w-6xl mx-auto p-8">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">Studio Overview</h1>
         <Link
           href="/dashboard/services/new"
           className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300 bg-slate-50 text-slate-900 shadow hover:bg-slate-50/90 h-9 px-4 py-2"

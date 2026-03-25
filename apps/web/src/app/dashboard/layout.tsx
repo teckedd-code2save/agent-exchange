@@ -7,7 +7,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex bg-gray-950 text-gray-100">
       <aside className="w-56 bg-gray-900 border-r border-gray-800 p-4 flex flex-col gap-1 shrink-0">
         <Link href="/" className="px-2 mb-5 block">
-          <span className="text-base font-bold tracking-tight">Agent<span className="text-indigo-400">Exchange</span></span>
+          <span className="text-base font-bold tracking-tight">MPP<span className="text-sky-400">Studio</span></span>
         </Link>
         <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider px-2 mb-1">Operator</p>
         <NavLink href="/dashboard" exact>Overview</NavLink>
@@ -21,7 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <NavLink href="/dashboard/wallet">Wallet</NavLink>
         </div>
         <div className="mt-auto pt-4 border-t border-gray-800 space-y-1">
-          <Link href="/marketplace" className="px-3 py-1.5 rounded-md text-xs text-gray-500 hover:text-gray-300 transition-colors block">← Marketplace</Link>
+          <Link href="/marketplace" className="px-3 py-1.5 rounded-md text-xs text-gray-500 hover:text-gray-300 transition-colors block">Discovery</Link>
           <Link href="/admin" className="px-3 py-1.5 rounded-md text-xs text-gray-500 hover:text-gray-300 transition-colors block">Admin panel</Link>
           <div className="pt-2 border-t border-gray-800">
             <UserMenu />
