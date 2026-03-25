@@ -35,8 +35,9 @@ export async function GET() {
       },
     },
   });
+  const typedServices: Array<(typeof services)[number]> = services;
 
-  const summary = services.map((service) => {
+  const summary = typedServices.map((service) => {
     const calls = service.calls;
     const successfulCalls = calls.filter((c) => c.status >= 200 && c.status < 300);
     const paidCalls = calls.filter((c) => c.challengeSolved);
