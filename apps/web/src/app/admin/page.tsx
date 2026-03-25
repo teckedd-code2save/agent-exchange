@@ -31,6 +31,8 @@ async function getAdminOverview() {
 export default async function AdminPage() {
   const { user, isOpenAdminMode } = await requireAdminUser();
   const overview = await getAdminOverview();
+  type OverviewService = (typeof overview.services)[number];
+  type OverviewCall = (typeof overview.calls)[number];
 
   return (
     <main className="mx-auto max-w-6xl space-y-6">
@@ -71,7 +73,7 @@ export default async function AdminPage() {
         <div className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6">
           <h2 className="text-lg font-semibold text-white">Latest services</h2>
           <div className="mt-5 grid gap-4">
-            {overview.services.map((service) => (
+            {overview.services.map((service: OverviewService) => (
               <article key={service.id} className="rounded-3xl border border-slate-800 bg-slate-950/60 p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -95,7 +97,7 @@ export default async function AdminPage() {
         <div className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6">
           <h2 className="text-lg font-semibold text-white">Recent traffic</h2>
           <div className="mt-5 space-y-3">
-            {overview.calls.map((call) => (
+            {overview.calls.map((call: OverviewCall) => (
               <div key={call.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-sm font-semibold text-white">{call.service.name}</p>
