@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@agent-exchange/db';
-import type { PaymentType as PaymentTypeValue, Prisma } from '@agent-exchange/db';
+import type { PaymentType as PaymentTypeValue } from '@agent-exchange/db';
 
 const VALID_PAYMENT_TYPES: PaymentTypeValue[] = ['tempo', 'stripe', 'lightning', 'sandbox'];
 
@@ -37,15 +37,15 @@ export async function GET(request: NextRequest) {
 
   const isValidPayment = payment ? VALID_PAYMENT_TYPES.includes(payment as PaymentTypeValue) : false;
 
-  const where: Prisma.ServiceWhereInput = { status };
-  if (category) where.category = category;
-  if (tags.length) where.tags = { hasEvery: tags };
-  if (payment && isValidPayment) {
-    where.supportedPayments = { has: payment as PaymentTypeValue };
-  }
-
   const services = await prisma.service.findMany({
-    where,
+    where: {
+      status,
+      ...(category ? { category } : {}),
+      ...(tags.length ? { tags: { hasEvery: tags } } : {}),
+      ...(payment && isValidPayment
+        ? { supportedPayments: { has: payment as PaymentTypeValue } }
+        : {}),
+    },
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     orderBy: [
