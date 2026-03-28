@@ -1,25 +1,9 @@
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
 import { isAuthBypassEnabled } from '@/lib/admin';
-import { getAppUrl } from '@/lib/env';
+import { apiGet } from '@/lib/api-client';
 import type { ProviderServiceRecord } from '@/lib/types/studio';
-
-async function getServices(cookieHeader: string): Promise<ProviderServiceRecord[]> {
-  const baseUrl = getAppUrl();
-  const response = await fetch(`${baseUrl}/api/v1/provider/services`, {
-    headers: { Cookie: cookieHeader },
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    return [];
-  }
-
-  const payload = await response.json() as { results?: ProviderServiceRecord[] };
-  return payload.results ?? [];
-}
 
 function statusClasses(status: string) {
   if (status === 'live') return 'bg-emerald-500/15 text-emerald-300';
@@ -31,13 +15,10 @@ function statusClasses(status: string) {
 export default async function ServicesPage() {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user && !isAuthBypassEnabled()) redirect('/login');
 
-  if (!user && !isAuthBypassEnabled()) {
-    redirect('/login');
-  }
-
-  const cookieHeader = cookies().getAll().map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
-  const services = await getServices(cookieHeader);
+  const payload = await apiGet<{ results?: ProviderServiceRecord[] }>('/api/v1/provider/services');
+  const services = payload?.results ?? [];
 
   return (
     <main className="mx-auto max-w-6xl">

@@ -1,142 +1,185 @@
 #!/usr/bin/env tsx
 /**
  * Seed DB with MPP.dev services
- * Fetches all services from https://mpp.dev/api/services and inserts into the DB
+ * Fetches all services from https://mpp.dev/api/services and inserts into the DB.
+ *
+ * Usage (from repo root):
+ *   pnpm tsx scripts/seed.ts
  */
+import path from "path";
+import { config } from "dotenv";
+// Load root .env.local before anything else so DATABASE_URL is set
+config({ path: path.resolve(process.cwd(), ".env.local") });
 
-import { prisma } from '@agent-exchange/db';
+import { prisma } from "@agent-exchange/db";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface MppEndpoint {
+  method: string;
+  path: string;
+  description?: string;
+  payment?: {
+    amount?: string;
+    currency?: string;
+    asset?: string;
+  };
+}
 
 interface MppService {
   id: string;
   name: string;
   url: string;
+  serviceUrl?: string;
   description?: string;
   categories?: string[];
-  slug?: string;
+  tags?: string[];
+  status?: string;
+  endpoints?: MppEndpoint[];
+  methods?: {
+    tempo?: { intents?: string[]; assets?: string[] };
+  };
 }
 
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 63);
+interface MppApiResponse {
+  version?: number;
+  services: MppService[];
 }
 
-async function main() {
-  console.info('→ Fetching services from mpp.dev...');
+// ── Category mapping ──────────────────────────────────────────────────────────
 
-  let services: MppService[] = [];
+function mapCategory(categories: string[] = []): string {
+  const cat = categories[0] ?? "other";
+  const map: Record<string, string> = {
+    ai: "text-generation",
+    llm: "text-generation",
+    blockchain: "data",
+    data: "data",
+    search: "search",
+    web: "search",
+    compute: "other",
+    media: "image-generation",
+    storage: "other",
+    social: "other",
+    audio: "audio",
+    video: "video",
+    embeddings: "embeddings",
+    moderation: "moderation",
+    code: "code",
+  };
+  return map[cat] ?? cat;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function ensureSystemProvider() {
+  return prisma.provider.upsert({
+    where: { userId: "system-mpp-seed" },
+    update: {},
+    create: {
+      userId: "system-mpp-seed",
+      email: "seed@mpp.studio",
+      name: "MPP Registry",
+    },
+  });
+}
+
+async function fetchMppServices(): Promise<MppService[]> {
+  console.info("→ Fetching services from mpp.dev...");
   try {
-    const resp = await fetch('https://mpp.dev/api/services', {
-      headers: { Accept: 'application/json' },
+    const resp = await fetch("https://mpp.dev/api/services", {
+      headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(15000),
     });
     if (!resp.ok) {
-      console.warn(`mpp.dev returned ${resp.status} — seeding with fallback data`);
-      services = getFallbackServices();
-    } else {
-      const data = (await resp.json()) as MppService[] | { services: MppService[] };
-      services = Array.isArray(data) ? data : data.services ?? [];
+      throw new Error(`HTTP ${resp.status}`);
     }
+    const data = (await resp.json()) as MppService[] | MppApiResponse;
+    return Array.isArray(data) ? data : (data.services ?? []);
   } catch (err) {
-    console.warn('Could not reach mpp.dev — seeding with fallback data:', (err as Error).message);
-    services = getFallbackServices();
+    console.error("Could not reach mpp.dev:", (err as Error).message);
+    process.exit(1);
   }
+}
 
-  console.info(`→ Seeding ${services.length} services...`);
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+async function main() {
+  console.info("→ Seeding Agent Exchange with MPP.dev services...\n");
+
+  const [provider, services] = await Promise.all([
+    ensureSystemProvider(),
+    fetchMppServices(),
+  ]);
+
+  console.info(`→ Upserting ${services.length} services...\n`);
+
+  let created = 0;
+  let skipped = 0;
 
   for (const svc of services) {
-    const slug = svc.slug ?? slugify(svc.name);
+    const slug = svc.id; // mpp.dev IDs are already URL-safe slugs
+    const endpoint = svc.serviceUrl ?? svc.url;
+    const category = mapCategory(svc.categories);
+    const tags = svc.tags ?? [];
+    const supportedPayments = svc.methods?.tempo ? ["tempo"] : ["sandbox"];
 
-    // Check if already seeded
-    const existing = await prisma.service.findUnique({ where: { slug } });
+    // Endpoints: map from mpp.dev shape, include only method/path/description/payment
+    const endpoints: MppEndpoint[] = (svc.endpoints ?? []).map((ep) => ({
+      method: ep.method,
+      path: ep.path,
+      description: ep.description,
+      payment: ep.payment,
+    }));
+
+    // Derive default pricing from first endpoint with payment info
+    const firstPriced = svc.endpoints?.find((ep) => ep.payment?.amount);
+    const pricingConfig = firstPriced?.payment
+      ? {
+          amount: firstPriced.payment.amount ?? "0.001",
+          currency: firstPriced.payment.currency ?? "USDC",
+        }
+      : { amount: "0.001", currency: "USDC" };
+
+    const existing = await prisma.service.findUnique({
+      where: { studioSlug: slug },
+      select: { id: true },
+    });
+
     if (existing) {
-      console.info(`  skip: ${slug} (already exists)`);
+      skipped++;
+      console.info(`  skip   ${slug}`);
       continue;
     }
 
-    // Create organisation
-    const org = await prisma.organisation.create({
+    await prisma.service.create({
       data: {
         name: svc.name,
-        slug: `org-${slug}`,
-        tier: 'free',
-        status: 'active',
-        billingEmail: `ops@${slug}.example`,
-        metadata: { source: 'mpp.dev', mppId: svc.id },
+        description:
+          svc.description ?? `${svc.name} via MPP Registry`,
+        providerId: provider.id,
+        endpoint,
+        studioSlug: slug,
+        status: "live",
+        category,
+        tags,
+        pricingType: "fixed",
+        pricingConfig,
+        endpoints: endpoints.length > 0 ? endpoints : undefined,
+        supportedPayments: supportedPayments as any,
       },
     });
 
-    // Create service
-    const service = await prisma.service.create({
-      data: {
-        organisationId: org.id,
-        name: svc.name,
-        slug,
-        description: svc.description ?? `${svc.name} — discovered from MPP registry`,
-        serviceUrl: svc.url,
-        registrationType: 'curated',
-        listingTier: 'free',
-        status: 'active',
-        dataClassification: 'public',
-        healthScore: 100,
-        verifiedAt: new Date(),
-      },
-    });
-
-    // Create categories
-    if (svc.categories && svc.categories.length > 0) {
-      await prisma.serviceCategory.createMany({
-        data: svc.categories.map((category) => ({
-          serviceId: service.id,
-          category,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    // Create MPP protocol
-    await prisma.serviceProtocol.create({
-      data: {
-        serviceId: service.id,
-        protocol: 'mpp',
-        specUrl: `${svc.url}/.well-known/mpp`,
-      },
-    });
-
-    // Create payment method (Tempo/USDC)
-    await prisma.servicePaymentMethod.create({
-      data: {
-        serviceId: service.id,
-        method: 'tempo',
-        intent: 'charge',
-        isActive: true,
-        config: {},
-      },
-    });
-
-    console.info(`  created: ${slug}`);
+    created++;
+    console.info(`  created ${slug}`);
   }
 
-  console.info('✓ Seeding complete');
-  await prisma.$disconnect();
+  console.info(`\n✓ Done — ${created} created, ${skipped} skipped`);
 }
 
-function getFallbackServices(): MppService[] {
-  return [
-    {
-      id: 'fallback-1',
-      name: 'Agent Exchange Demo',
-      url: 'https://agentexchange.dev',
-      description: 'Demo service for Agent Exchange',
-      categories: ['demo', 'marketplace'],
-      slug: 'agent-exchange-demo',
-    },
-  ];
-}
-
-main().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

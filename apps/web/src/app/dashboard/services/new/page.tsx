@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr';
 
 const CATEGORIES = [
   'image-generation', 'text-generation', 'search', 'data',
@@ -33,9 +34,19 @@ export default function NewServicePage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/v1/provider/services', {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+      );
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+      const res = await fetch(`${apiUrl}/api/v1/provider/services`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           name: form.name,
           description: form.description,

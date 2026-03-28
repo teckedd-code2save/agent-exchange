@@ -2,33 +2,15 @@ import { createSupabaseServerClient } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { isAuthBypassEnabled } from '@/lib/admin';
-import { getAppUrl } from '@/lib/env';
+import { apiGet } from '@/lib/api-client';
 import type { ProviderAnalyticsResponse, ProviderAnalyticsService } from '@/lib/types/studio';
 
-async function getAnalytics(cookieStore: string) {
-  try {
-    const res = await fetch(`${getAppUrl()}/api/v1/provider/analytics`, {
-      headers: { Cookie: cookieStore },
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return res.json() as Promise<ProviderAnalyticsResponse>;
-  } catch {
-    return null;
-  }
-}
-
 export default async function DashboardPage() {
-  const supabase = createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser(); const userId = user?.id;
-  if (!userId && !isAuthBypassEnabled()) redirect('/login');
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.id && !isAuthBypassEnabled()) redirect('/login');
 
-  const { cookies } = await import('next/headers');
-  const cookieString = cookies()
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join('; ');
-
-  const data = await getAnalytics(cookieString);
+  const data = await apiGet<ProviderAnalyticsResponse>('/api/v1/provider/analytics');
 
   if (!data || !data.services?.length) {
     return (
