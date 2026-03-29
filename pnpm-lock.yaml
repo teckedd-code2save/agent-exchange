@@ -163,7 +163,7 @@ importers:
         specifier: ^20.0.0
         version: 20.19.37
       '@types/pg':
-        specifier: ^8.11.0
+        specifier: ^8.20.0
         version: 8.20.0
       prisma:
         specifier: ^7.0.0
