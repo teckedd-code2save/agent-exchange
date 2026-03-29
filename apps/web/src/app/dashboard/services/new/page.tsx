@@ -40,11 +40,11 @@ export default function NewServicePage() {
       );
       const { data: { session } } = await supabase.auth.getSession();
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '';
       const headers: HeadersInit = { 'Content-Type': 'application/json' };
       if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
 
-      const res = await fetch(`${apiUrl}/api/v1/provider/services`, {
+      const res = await fetch(`${apiBase}/api/v1/provider/services`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
