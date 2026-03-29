@@ -11,13 +11,19 @@ goes live. Group by how long each takes to provision so you can parallelize.
 |------|-------|
 | Create project | https://supabase.com/dashboard → New project |
 | Connection string | Settings → Database → Connection string (Transaction mode / Pooler) |
-| Direct URL | Settings → Database → Connection string (Session mode) |
+| Prisma migration URL | Settings → Database → Connection string (Session mode / IPv4-friendly pooler) |
 
 **Env vars to set:**
 ```
 DATABASE_URL=postgres://postgres.[ref]:6543/postgres?pgbouncer=true
 DIRECT_URL=postgres://postgres.[ref]:5432/postgres
 ```
+
+Notes:
+- `DATABASE_URL` is the pooled runtime connection.
+- `DIRECT_URL` is the Prisma migration/introspection connection.
+- For Supabase's IPv4-friendly Prisma setup, `DIRECT_URL` may still use the pooler host on port `5432`.
+- Do not point `DIRECT_URL` at the pooled runtime URL on port `6543`.
 
 After credentials are ready:
 ```bash

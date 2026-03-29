@@ -7,7 +7,14 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // Use direct connection for migrations (bypasses PgBouncer prepared-statement issues)
+    // Prisma uses DIRECT_URL for migrations/introspection.
+    //
+    // Local Docker: a normal Postgres URL on 5432 is fine.
+    // Supabase (IPv4-friendly pooling setup): use the session-mode pooler URL on 5432.
+    // Example:
+    //   DIRECT_URL=postgresql://postgres.<ref>:<password>@aws-<region>.pooler.supabase.com:5432/postgres
+    //
+    // Do not point DIRECT_URL at the runtime pooled PgBouncer URL on 6543.
     url: env("DIRECT_URL"),
   },
 });

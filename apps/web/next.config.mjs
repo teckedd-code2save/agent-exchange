@@ -12,9 +12,11 @@ config({ path: path.resolve(__dirname, '../../.env.local') });
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Web app no longer imports backend packages directly — no transpilation needed.
   experimental: {
-    serverComponentsExternalPackages: [],
+    // Keep workspace packages and Prisma client external so Vercel/Next can resolve
+    // the generated client and native query engine at runtime instead of bundling
+    // a stale copy into the server output.
+    serverComponentsExternalPackages: ['@agent-exchange/db', '@prisma/client', 'prisma', 'pg'],
   },
   env: {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

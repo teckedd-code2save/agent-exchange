@@ -63,5 +63,7 @@ If you use password recovery, also allow:
 
 - `NEXT_PUBLIC_APP_URL` is optional on Vercel. The app falls back to `VERCEL_URL`.
 - Keep `DATABASE_URL` as the pooled runtime connection.
-- Keep `DIRECT_URL` as the direct Prisma connection.
+- Keep `DIRECT_URL` as the Prisma migration/introspection connection.
+  - Supabase with IPv4-friendly pooling: `DATABASE_URL` should use `:6543` with `?pgbouncer=true`, while `DIRECT_URL` should use the session-mode pooler on `:5432`.
+  - Do not reuse the same pooled runtime URL for both.
 - Use separate Supabase projects for staging and production.

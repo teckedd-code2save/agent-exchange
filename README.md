@@ -71,6 +71,9 @@ For Vercel or local development, make sure Supabase Auth includes the exact call
 ## Notes
 
 - `DATABASE_URL` should be the pooled runtime connection.
-- `DIRECT_URL` should be the direct Prisma connection.
+- `DIRECT_URL` should be the Prisma migration/introspection connection.
+  - For local Docker/Postgres: use the normal Postgres URL on `:5432`.
+  - For Supabase with IPv4-friendly pooling: use the session-mode pooler URL on `:5432`.
+  - Do not point `DIRECT_URL` at the pooled runtime URL on `:6543`.
 - `NEXT_PUBLIC_APP_URL` is optional on Vercel; the app can infer its public URL from `VERCEL_URL`.
 - The app is portable, but Vercel + Supabase + Upstash is the easiest path.
