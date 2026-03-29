@@ -14,19 +14,42 @@ export default async function DashboardPage() {
 
   if (!data || !data.services?.length) {
     return (
-      <main className="max-w-5xl mx-auto p-8">
-        <h1 className="text-3xl font-bold mb-8">Studio Overview</h1>
-        <div className="bg-slate-900 rounded-xl p-12 text-center border border-slate-800">
-          <h2 className="text-xl font-semibold mb-3">No Services Registered</h2>
-          <p className="text-slate-400 mb-6 max-w-md mx-auto">
-            Register your first paid API to get a sandbox proxy endpoint and start testing the Studio payment loop.
-          </p>
+      <main className="mx-auto max-w-5xl px-6 py-8 lg:px-8">
+        <div className="mb-8 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-300">Studio Overview</p>
+            <h1 className="mt-2 text-3xl font-bold text-white">No services registered yet</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-400">
+              Register your first paid API to get a sandbox proxy endpoint and start testing the Studio payment loop.
+            </p>
+          </div>
           <Link
             href="/dashboard/services/new"
-            className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300 disabled:pointer-events-none disabled:opacity-50 bg-slate-50 text-slate-900 shadow hover:bg-slate-50/90 h-10 px-6 py-2"
+            className="inline-flex items-center justify-center rounded-full bg-sky-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
           >
-            Register Service
+            Register service
           </Link>
+        </div>
+
+        <div className="rounded-[2rem] border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center">
+          <h2 className="text-xl font-semibold text-white">Nothing to show yet</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">
+            Once you register a service, this overview will show revenue, calls, latency, and quick links into the gateway tester.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/dashboard/services/new"
+              className="inline-flex rounded-full border border-sky-400/40 px-5 py-2.5 text-sm font-semibold text-sky-300 transition hover:bg-sky-400/10"
+            >
+              Create your first service
+            </Link>
+            <Link
+              href="/dashboard/services"
+              className="inline-flex rounded-full border border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-slate-500 hover:bg-slate-800/70"
+            >
+              Open registry
+            </Link>
+          </div>
         </div>
       </main>
     );

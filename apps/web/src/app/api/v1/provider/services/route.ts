@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Prisma, prisma } from '@agent-exchange/db';
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 async function authenticate(req: NextRequest) {
   if (process.env['AUTH_BYPASS'] === 'true') {
@@ -8,22 +9,29 @@ async function authenticate(req: NextRequest) {
   }
 
   const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const supabase = createClient(
+      process.env['NEXT_PUBLIC_SUPABASE_URL']!,
+      process.env['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY']!,
+    );
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+
+    if (!error && user) {
+      return { userId: user.id, email: user.email ?? '' };
+    }
   }
 
-  const token = authHeader.slice(7);
-  const supabase = createClient(
-    process.env['NEXT_PUBLIC_SUPABASE_URL']!,
-    process.env['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY']!,
-  );
-
+  const supabase = createSupabaseServerClient();
   const {
     data: { user },
-    error,
-  } = await supabase.auth.getUser(token);
+  } = await supabase.auth.getUser();
 
-  if (error || !user) return null;
+  if (!user) return null;
   return { userId: user.id, email: user.email ?? '' };
 }
 
