@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { prisma } from '@agent-exchange/db';
+import { Prisma, prisma } from '@agent-exchange/db';
 
 async function authenticate(req: NextRequest) {
   if (process.env['AUTH_BYPASS'] === 'true') {
@@ -106,7 +106,9 @@ export async function POST(req: NextRequest) {
       status: 'sandbox',
       pricingType: (body.pricingType as never) ?? 'fixed',
       pricingConfig: pricingConfig ?? { amount: '0.01', currency: 'USDC' },
-      endpoints: body.endpoints ?? undefined,
+      endpoints: body.endpoints
+        ? (body.endpoints as Prisma.InputJsonValue)
+        : undefined,
       supportedPayments: (body.supportedPayments as never) ?? ['sandbox'],
       mppChallengeEndpoint: body.mppChallengeEndpoint ?? null,
       providerId: dbProvider.id,
