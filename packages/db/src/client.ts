@@ -8,14 +8,19 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createClient() {
-  // Strip pgbouncer hint (not a valid pg param), force sslmode=require so pg
-  // sends SSLRequest immediately, disable cert verification for Supabase's
-  // self-signed PgBouncer certificate.
-  const base = (process.env.DATABASE_URL ?? "").replace(/[?&]pgbouncer=true/g, "");
-  const connectionString = base + (base.includes("?") ? "&" : "?") + "sslmode=require";
+  // Strip the Prisma-specific pgbouncer hint (pg doesn't understand it), then
+  // use libpq-compat TLS semantics explicitly. This avoids the self-signed
+  // certificate chain failure we were seeing against Supabase's pooler on Vercel.
+  const raw = process.env.DATABASE_URL ?? "";
+  const withoutPgbouncerHint = raw.replace(/[?&]pgbouncer=true/g, "");
+  const separator = withoutPgbouncerHint.includes("?") ? "&" : "?";
+  const connectionString =
+    withoutPgbouncerHint + `${separator}uselibpqcompat=true&sslmode=require`;
+
   const pool = new Pool({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    // Do not pass a parallel ssl object here; let the connection string drive
+    // TLS behavior consistently for pg + Supabase pooler.
     // Serverless-safe defaults: keep the local pool tiny because Supabase already
     // sits behind its own pooler. Large per-instance pools on Vercel can cause
     // checkout timeouts under light burst traffic.
