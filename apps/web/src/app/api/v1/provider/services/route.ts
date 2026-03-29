@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
       status: 'sandbox',
       pricingType: (body.pricingType as never) ?? 'fixed',
       pricingConfig: pricingConfig ?? { amount: '0.01', currency: 'USDC' },
-      endpoints: body.endpoints ?? null,
+      endpoints: body.endpoints ?? undefined,
       supportedPayments: (body.supportedPayments as never) ?? ['sandbox'],
       mppChallengeEndpoint: body.mppChallengeEndpoint ?? null,
       providerId: dbProvider.id,
