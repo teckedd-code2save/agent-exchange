@@ -6,7 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql"  
+  
 }
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -87,8 +88,12 @@ model Service {
   pricingType   PricingType @default(fixed)
   pricingConfig Json // { amount: "0.005", currency: "USDC" }
 
-  // Per-endpoint configuration (method, path, description, payment config)
-  endpoints Json? // Array of { method, path, description, payment: { amount, currency, ... } }
+  // Per-endpoint contract metadata. Each entry can include method, path,
+  // description, request/response examples, and testing safety flags.
+  endpoints Json? // Array of { method, path, description, requestSchema, responseExample, testExample, supportsSandbox, supportsTestnet, supportsLive, liveSafe, sideEffects, supportsDryRun, idempotent, recommendedForTesting, isPrimaryTest }
+
+  // Service-level lifecycle/testing guidance for Studio UI and discovery.
+  lifecycle Json? // { sandboxReady, testnetReady, liveReady, walletSetupUrl, liveTestingGuide, recommendedFlow }
 
   // MPP specific settings
   mppChallengeEndpoint String? // Override for where to send 402s if different from endpoint

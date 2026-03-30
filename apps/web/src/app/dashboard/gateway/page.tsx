@@ -3,6 +3,21 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+type ServiceEndpoint = {
+  method?: string;
+  path?: string;
+  description?: string;
+  supportsSandbox?: boolean;
+  supportsTestnet?: boolean;
+  supportsLive?: boolean;
+  liveSafe?: boolean;
+  sideEffects?: boolean;
+  supportsDryRun?: boolean;
+  recommendedForTesting?: boolean;
+  isPrimaryTest?: boolean;
+  testExample?: { body?: unknown };
+};
+
 type ServiceSummary = {
   id: string;
   studioSlug: string;
@@ -12,6 +27,15 @@ type ServiceSummary = {
   pricingType: string;
   pricingConfig?: { amount?: string; currency?: string } | null;
   supportedPayments: string[];
+  endpoints?: ServiceEndpoint[] | null;
+  lifecycle?: {
+    sandboxReady?: boolean;
+    testnetReady?: boolean;
+    liveReady?: boolean;
+    walletSetupUrl?: string | null;
+    liveTestingGuide?: string | null;
+    recommendedFlow?: string | null;
+  } | null;
 };
 
 type FlowStep = 'idle' | 'challenging' | 'challenged' | 'paying' | 'done' | 'error';
@@ -75,7 +99,7 @@ function GatewayTesterInner() {
 
   const [services, setServices] = useState<ServiceSummary[]>([]);
   const [selectedSlug, setSelectedSlug] = useState(preselectedService);
-  const [requestPath, setRequestPath] = useState('/reflect');
+  const [requestPath, setRequestPath] = useState('/');
   const [requestMethod, setRequestMethod] = useState('POST');
   const [requestBody, setRequestBody] = useState('{\n  "input": "hello from MPP Studio"\n}');
   const [wallet, setWallet] = useState('');
@@ -104,7 +128,15 @@ function GatewayTesterInner() {
         const chosen = preselectedService
           ? results.find((service) => service.studioSlug === preselectedService)
           : undefined;
-        setSelectedSlug(chosen?.studioSlug ?? results[0]?.studioSlug ?? '');
+        const picked = chosen ?? results[0] ?? null;
+        setSelectedSlug(picked?.studioSlug ?? '');
+
+        const primary = picked?.endpoints?.find((endpoint) => endpoint.isPrimaryTest) ?? picked?.endpoints?.[0];
+        if (primary?.path) setRequestPath(primary.path);
+        if (primary?.method) setRequestMethod(primary.method.toUpperCase());
+        if (primary?.testExample?.body) {
+          setRequestBody(JSON.stringify(primary.testExample.body, null, 2));
+        }
       })
       .catch(() => appendLog('Failed to load provider services'));
   }, [appendLog, preselectedService]);
@@ -225,7 +257,7 @@ function GatewayTesterInner() {
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-300">Proxy Tester</p>
         <h1 className="mt-2 text-3xl font-bold text-white">Run the Studio payment loop</h1>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
-          Pick one of your services, hit the Studio proxy, inspect the 402 challenge, then replay the call with a sandbox credential. This is the fastest way to verify that your API and the Studio proxy agree on the contract.
+          Start in the Studio sandbox with the exact endpoint contract your service published. Inspect the <code className="rounded bg-slate-900 px-1 py-0.5 text-sky-300">402</code> challenge, replay with <code className="rounded bg-slate-900 px-1 py-0.5 text-emerald-300">Authorization: Payment sandbox-credential</code>, then graduate to testnet and live with a real wallet when the service is ready.
         </p>
       </div>
 
@@ -238,7 +270,13 @@ function GatewayTesterInner() {
               <select
                 value={selectedSlug}
                 onChange={(event) => {
-                  setSelectedSlug(event.target.value);
+                  const nextSlug = event.target.value;
+                  setSelectedSlug(nextSlug);
+                  const picked = services.find((service) => service.studioSlug === nextSlug) ?? null;
+                  const primary = picked?.endpoints?.find((endpoint) => endpoint.isPrimaryTest) ?? picked?.endpoints?.[0];
+                  if (primary?.path) setRequestPath(primary.path);
+                  if (primary?.method) setRequestMethod(primary.method.toUpperCase());
+                  if (primary?.testExample?.body) setRequestBody(JSON.stringify(primary.testExample.body, null, 2));
                   resetFlow();
                 }}
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -273,7 +311,7 @@ function GatewayTesterInner() {
                 <input
                   value={requestPath}
                   onChange={(event) => setRequestPath(event.target.value)}
-                  placeholder="/reflect"
+                  placeholder="/"
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                 />
               </div>
@@ -324,6 +362,53 @@ function GatewayTesterInner() {
                   <dd className="text-white">{currentService.supportedPayments.join(', ')}</dd>
                 </div>
               </dl>
+              {currentService.endpoints?.length ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Published starter endpoints</p>
+                  <div className="mt-3 space-y-2">
+                    {currentService.endpoints.map((endpoint, index) => (
+                      <button
+                        key={`${endpoint.method ?? 'GET'}:${endpoint.path ?? index}`}
+                        type="button"
+                        onClick={() => {
+                          if (endpoint.path) setRequestPath(endpoint.path);
+                          if (endpoint.method) setRequestMethod(endpoint.method.toUpperCase());
+                          if (endpoint.testExample?.body) setRequestBody(JSON.stringify(endpoint.testExample.body, null, 2));
+                          resetFlow();
+                        }}
+                        className="flex w-full items-start justify-between rounded-xl border border-slate-800 px-3 py-3 text-left transition hover:border-sky-400/40 hover:bg-slate-900"
+                      >
+                        <div>
+                          <p className="font-mono text-xs text-sky-300">{endpoint.method ?? 'GET'} {endpoint.path ?? '/'}</p>
+                          <p className="mt-1 text-xs text-slate-400">{endpoint.description ?? 'No description provided.'}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                          {endpoint.recommendedForTesting && <span className="rounded-full border border-emerald-400/30 px-2 py-1 text-emerald-300">starter</span>}
+                          {endpoint.liveSafe && <span className="rounded-full border border-sky-400/30 px-2 py-1 text-sky-300">live-safe</span>}
+                          {endpoint.sideEffects && <span className="rounded-full border border-amber-400/30 px-2 py-1 text-amber-300">side effects</span>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {currentService.lifecycle ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Promotion guidance</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em]">
+                    {currentService.lifecycle.sandboxReady && <span className="rounded-full border border-emerald-400/30 px-2 py-1 text-emerald-300">sandbox ready</span>}
+                    {currentService.lifecycle.testnetReady && <span className="rounded-full border border-sky-400/30 px-2 py-1 text-sky-300">testnet ready</span>}
+                    {currentService.lifecycle.liveReady && <span className="rounded-full border border-fuchsia-400/30 px-2 py-1 text-fuchsia-300">live ready</span>}
+                  </div>
+                  {currentService.lifecycle.recommendedFlow && <p className="mt-3 leading-6 text-slate-400">{currentService.lifecycle.recommendedFlow}</p>}
+                  {currentService.lifecycle.liveTestingGuide && <p className="mt-3 leading-6 text-slate-400">{currentService.lifecycle.liveTestingGuide}</p>}
+                  {currentService.lifecycle.walletSetupUrl && (
+                    <a href={currentService.lifecycle.walletSetupUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-sky-400/40 hover:text-white">
+                      Wallet setup guide
+                    </a>
+                  )}
+                </div>
+              ) : null}
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Proxy URL</p>
                 <div className="mt-2 flex items-start gap-2">

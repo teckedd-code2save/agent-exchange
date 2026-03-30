@@ -26,6 +26,19 @@ export default function NewServicePage() {
     pricingType: 'fixed',
     amount: '0.01',
     currency: 'USDC',
+    primaryMethod: 'POST',
+    primaryPath: '/',
+    primaryDescription: 'Primary starter endpoint',
+    sampleBody: '{\n  "input": "hello"\n}',
+    supportsSandbox: true,
+    supportsTestnet: false,
+    supportsLive: false,
+    liveSafe: false,
+    sideEffects: false,
+    supportsDryRun: false,
+    recommendedForTesting: true,
+    walletSetupUrl: '',
+    liveTestingGuide: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,6 +69,41 @@ export default function NewServicePage() {
           pricingType: form.pricingType,
           pricingConfig: { amount: form.amount, currency: form.currency },
           supportedPayments: ['sandbox'],
+          endpoints: [
+            {
+              method: form.primaryMethod,
+              path: form.primaryPath,
+              description: form.primaryDescription,
+              testExample: {
+                body: (() => {
+                  try {
+                    return JSON.parse(form.sampleBody || '{}');
+                  } catch {
+                    return { input: 'hello' };
+                  }
+                })(),
+              },
+              supportsSandbox: form.supportsSandbox,
+              supportsTestnet: form.supportsTestnet,
+              supportsLive: form.supportsLive,
+              liveSafe: form.liveSafe,
+              sideEffects: form.sideEffects,
+              supportsDryRun: form.supportsDryRun,
+              idempotent: !form.sideEffects,
+              recommendedForTesting: form.recommendedForTesting,
+              isPrimaryTest: true,
+            },
+          ],
+          lifecycle: {
+            sandboxReady: form.supportsSandbox,
+            testnetReady: form.supportsTestnet,
+            liveReady: form.supportsLive,
+            walletSetupUrl: form.walletSetupUrl || null,
+            liveTestingGuide: form.liveTestingGuide || null,
+            recommendedFlow: form.supportsLive
+              ? 'Start in sandbox, move to testnet with a real wallet, then run a low-risk live-safe operation before enabling full production traffic.'
+              : 'Start in sandbox and promote to testnet once the proxy contract is stable.',
+          },
         }),
       });
 
@@ -89,16 +137,23 @@ export default function NewServicePage() {
           <div className="space-y-3 mb-8">
             <h3 className="font-semibold text-white">Test it right now:</h3>
             <div className="bg-slate-950 rounded-lg p-4 font-mono text-xs border border-slate-800 overflow-x-auto">
-              <p className="text-slate-500 mb-1"># Step 1: Hit the endpoint — get a 402 challenge</p>
-              <p className="text-white">curl -X POST {result.sandboxEndpoint}/your/path \</p>
+              <p className="text-slate-500 mb-1"># Step 1: Hit your starter endpoint — get a 402 challenge</p>
+              <p className="text-white">curl -X {form.primaryMethod} {result.sandboxEndpoint}{form.primaryPath} \</p>
               <p className="text-white ml-4">-H &quot;Content-Type: application/json&quot; \</p>
-              <p className="text-white ml-4">-d {'\'{"input": "test"}\''}</p>
-              <p className="text-slate-500 mt-3 mb-1"># Step 2: Resend with sandbox credential</p>
-              <p className="text-white">curl -X POST {result.sandboxEndpoint}/your/path \</p>
+              <p className="text-white ml-4">-d {JSON.stringify(form.sampleBody)}</p>
+              <p className="text-slate-500 mt-3 mb-1"># Step 2: Replay with the Studio sandbox shortcut</p>
+              <p className="text-white">curl -X {form.primaryMethod} {result.sandboxEndpoint}{form.primaryPath} \</p>
               <p className="text-white ml-4">-H &quot;Content-Type: application/json&quot; \</p>
               <p className="text-white ml-4">-H &quot;Authorization: Payment sandbox-credential&quot; \</p>
-              <p className="text-white ml-4">-d {'\'{"input": "test"}\''}</p>
+              <p className="text-white ml-4">-d {JSON.stringify(form.sampleBody)}</p>
             </div>
+          </div>
+
+          <div className="space-y-2 mb-8 text-sm text-slate-300">
+            <h3 className="font-semibold text-white">What happens after sandbox?</h3>
+            <p>Studio sandbox uses a built-in shortcut credential for learning the 402 + replay loop.</p>
+            <p>When you are ready for real rails, move the service to <span className="text-sky-300">testnet</span>, fund a real wallet, and run your provider&apos;s recommended low-risk call first.</p>
+            <p>Only then should you enable <span className="text-emerald-300">live</span> and real side-effecting operations.</p>
           </div>
 
           <div className="flex gap-3">
@@ -109,7 +164,7 @@ export default function NewServicePage() {
               Go to Dashboard
             </button>
             <button
-              onClick={() => { setResult(null); setForm({ name: '', description: '', endpoint: '', category: 'text-generation', tags: '', pricingType: 'fixed', amount: '0.01', currency: 'USDC' }); }}
+              onClick={() => { setResult(null); setForm({ name: '', description: '', endpoint: '', category: 'text-generation', tags: '', pricingType: 'fixed', amount: '0.01', currency: 'USDC', primaryMethod: 'POST', primaryPath: '/', primaryDescription: 'Primary starter endpoint', sampleBody: '{\n  "input": "hello"\n}', supportsSandbox: true, supportsTestnet: false, supportsLive: false, liveSafe: false, sideEffects: false, supportsDryRun: false, recommendedForTesting: true, walletSetupUrl: '', liveTestingGuide: '' }); }}
               className="flex-1 rounded-md border border-slate-700 text-slate-300 font-medium h-10 px-4 hover:bg-slate-800 transition-colors"
             >
               Register Another
@@ -124,7 +179,7 @@ export default function NewServicePage() {
     <main className="max-w-2xl mx-auto p-8">
       <h1 className="text-3xl font-bold mb-2">Register a Service</h1>
       <p className="text-slate-400 mb-8">
-        Your service will start in sandbox mode. Test the full 402 MPP flow, then promote to testnet when ready.
+        Publish a service with an explicit starter endpoint, clear sandbox guidance, and a path from sandbox to testnet to live. When you are ready for real payments, Studio should help the caller understand wallet setup and which operations are safe to test in production.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -188,8 +243,11 @@ export default function NewServicePage() {
           </div>
         </div>
 
-        <div className="bg-slate-900 rounded-xl p-5 border border-slate-800">
-          <h3 className="font-semibold text-white mb-4">Pricing</h3>
+        <div className="bg-slate-900 rounded-xl p-5 border border-slate-800 space-y-5">
+          <div>
+            <h3 className="font-semibold text-white mb-1">Pricing</h3>
+            <p className="text-xs text-slate-500">Define the payment challenge users will see first.</p>
+          </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5">Type</label>
@@ -226,6 +284,63 @@ export default function NewServicePage() {
                 <option value="BTC">BTC</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 rounded-xl p-5 border border-slate-800 space-y-5">
+          <div>
+            <h3 className="font-semibold text-white mb-1">Starter endpoint contract</h3>
+            <p className="text-xs text-slate-500">Give Studio one clear endpoint to prefill in the tester. This should be the easiest safe call a user can make first.</p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">Method</label>
+              <select value={form.primaryMethod} onChange={(e) => setForm({ ...form, primaryMethod: e.target.value })} className="w-full rounded-md bg-slate-950 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400">
+                {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => (
+                  <option key={method} value={method}>{method}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">Path</label>
+              <input value={form.primaryPath} onChange={(e) => setForm({ ...form, primaryPath: e.target.value })} placeholder="/v0/inboxes" className="w-full rounded-md bg-slate-950 border border-slate-700 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-slate-400" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Endpoint description</label>
+            <input value={form.primaryDescription} onChange={(e) => setForm({ ...form, primaryDescription: e.target.value })} placeholder="Create a sandbox-safe inbox" className="w-full rounded-md bg-slate-950 border border-slate-700 text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Sample request body</label>
+            <textarea value={form.sampleBody} onChange={(e) => setForm({ ...form, sampleBody: e.target.value })} rows={5} className="w-full rounded-md bg-slate-950 border border-slate-700 text-white px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-slate-400" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.supportsSandbox} onChange={(e) => setForm({ ...form, supportsSandbox: e.target.checked })} /> Sandbox ready</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.supportsTestnet} onChange={(e) => setForm({ ...form, supportsTestnet: e.target.checked })} /> Testnet ready</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.supportsLive} onChange={(e) => setForm({ ...form, supportsLive: e.target.checked })} /> Live ready</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.liveSafe} onChange={(e) => setForm({ ...form, liveSafe: e.target.checked })} /> Safe to test in live</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.sideEffects} onChange={(e) => setForm({ ...form, sideEffects: e.target.checked })} /> Has real side effects</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.supportsDryRun} onChange={(e) => setForm({ ...form, supportsDryRun: e.target.checked })} /> Supports dry run / preview</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.recommendedForTesting} onChange={(e) => setForm({ ...form, recommendedForTesting: e.target.checked })} /> Recommended first test</label>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 rounded-xl p-5 border border-slate-800 space-y-4">
+          <div>
+            <h3 className="font-semibold text-white mb-1">Testnet → live guidance</h3>
+            <p className="text-xs text-slate-500">Make the path explicit. Help users understand which wallet or payment tool to set up when they are ready for real rails.</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Wallet setup URL</label>
+            <input value={form.walletSetupUrl} onChange={(e) => setForm({ ...form, walletSetupUrl: e.target.value })} placeholder="https://docs.yourservice.com/wallet-setup" className="w-full rounded-md bg-slate-950 border border-slate-700 text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Live testing guide</label>
+            <textarea value={form.liveTestingGuide} onChange={(e) => setForm({ ...form, liveTestingGuide: e.target.value })} rows={4} placeholder="Start with sandbox. Move to testnet with a funded wallet. In live, first call /quote or /preview before executing mutating operations." className="w-full rounded-md bg-slate-950 border border-slate-700 text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
           </div>
         </div>
 
