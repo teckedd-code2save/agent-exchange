@@ -96,7 +96,38 @@ async function verifyProof(method: string, proof: string, amount: string): Promi
   if (method === 'tempo') {
     return verifyTempoPayment(proof, amount);
   }
+  if (method === 'x402') {
+    return verifyX402Proof(proof, amount);
+  }
   return false;
+}
+
+/**
+ * Verify an x402 payment proof.
+ *
+ * The `proof` here is the raw value of the client's `X-PAYMENT` header
+ * (base64url-encoded EIP-712 signed payload), passed through as the MPP
+ * credential `proof` field so it can be forwarded to the CDP facilitator.
+ */
+async function verifyX402Proof(proof: string, amount: string): Promise<boolean> {
+  const payTo = process.env['X402_PAY_TO_ADDRESS'];
+  if (!payTo) {
+    console.warn('[mpp:verify] x402 payment received but X402_PAY_TO_ADDRESS is not configured');
+    return false;
+  }
+  try {
+    const { buildX402Details, verifyX402Payment } = await import('./x402');
+    const requirements = buildX402Details(
+      amount,
+      payTo,
+      '/', // resource path is not re-validated at verify time
+      process.env['X402_NETWORK'] ?? 'base-sepolia',
+    );
+    return verifyX402Payment(proof, requirements);
+  } catch (err) {
+    console.error('[mpp:verify] x402 verification error:', err);
+    return false;
+  }
 }
 
 async function verifyStripeProof(paymentIntentId: string): Promise<boolean> {

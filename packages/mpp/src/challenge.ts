@@ -3,7 +3,13 @@ import Decimal from 'decimal.js';
 import type { PrismaClient } from '@agent-exchange/db';
 import type { CacheAdapter } from '@agent-exchange/cache';
 import { CacheKeys } from '@agent-exchange/cache';
-import type { ChallengeResult, PaymentMethod, PaymentIntent, StripePaymentDetails } from './types';
+import type {
+  ChallengeResult,
+  PaymentMethod,
+  PaymentIntent,
+  StripePaymentDetails,
+  X402PaymentDetails,
+} from './types';
 
 const STRIPE_MIN_CENTS = 50;
 
@@ -98,6 +104,23 @@ export async function issueChallenge(params: IssueChallengeParams): Promise<Chal
     }
   }
 
+  // x402: embed USDC payment details so clients know where/how to pay on-chain.
+  // Requires X402_PAY_TO_ADDRESS in env; X402_NETWORK defaults to base-sepolia.
+  let x402Details: X402PaymentDetails | undefined;
+  if (paymentMethods.includes('x402') && process.env['X402_PAY_TO_ADDRESS']) {
+    try {
+      const { buildX402Details } = await import('./x402');
+      x402Details = buildX402Details(
+        amount,
+        process.env['X402_PAY_TO_ADDRESS'],
+        endpointPath,
+        process.env['X402_NETWORK'] ?? 'base-sepolia',
+      );
+    } catch (err) {
+      console.error('[mpp:challenge] Failed to build x402 details:', err);
+    }
+  }
+
   const body = {
     type: 'https://mpp.studio/problems/payment-required',
     title: 'Payment Required',
@@ -106,7 +129,13 @@ export async function issueChallenge(params: IssueChallengeParams): Promise<Chal
     challengeId,
     paymentMethods: [primaryMethod, ...paymentMethods.filter((method) => method !== primaryMethod)],
     ...(stripeDetails ? { stripe: stripeDetails } : {}),
+    ...(x402Details ? { x402: x402Details } : {}),
   };
 
-  return { challengeId, wwwAuthenticate, body, ...(stripeDetails ? { stripe: stripeDetails } : {}) };
+  return {
+    challengeId,
+    wwwAuthenticate,
+    body,
+    ...(stripeDetails ? { stripe: stripeDetails } : {}),
+  };
 }

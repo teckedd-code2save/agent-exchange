@@ -1,13 +1,33 @@
 // MPP Studio — mpp package
-// Core 402 challenge logic lives in the proxy route directly for now.
-// This package will wrap mppx SDK once we're on testnet/live.
-// For the sandbox, all challenge logic is handled in apps/web/src/app/api/v1/proxy
+// Exports the core 402 challenge/verify pipeline and x402 helpers.
+
+export { issueChallenge } from './challenge';
+export type { IssueChallengeParams } from './challenge';
+
+export { verifyCredential } from './verify';
+export type { VerifyCredentialParams } from './verify';
+
+export { buildX402Details, verifyX402Payment, usdcContractAddress, X402_DEFAULT_NETWORK } from './x402';
+
+export type {
+  PaymentMethod,
+  PaymentIntent,
+  X402PaymentDetails,
+  StripePaymentDetails,
+  ChallengeResult,
+  VerifyResult,
+  MppContext,
+  MppCredentialPayload,
+  ProblemDetails,
+} from './types';
+
+// ── Legacy sandbox helpers (used by apps/web proxy route) ─────────────────────
 
 export interface SandboxChallenge {
-  challengeId: string
-  amount: string
-  currency: string
-  methods: string[]
+  challengeId: string;
+  amount: string;
+  currency: string;
+  methods: string[];
 }
 
 export function createSandboxChallenge(amount: string, currency: string): SandboxChallenge {
@@ -16,14 +36,13 @@ export function createSandboxChallenge(amount: string, currency: string): Sandbo
     amount,
     currency,
     methods: ['sandbox'],
-  }
+  };
 }
 
 export function validateSandboxCredential(authHeader: string): boolean {
-  // Any credential with "sandbox-credential" or "Bearer sand_" prefix is accepted
-  return authHeader.includes('sandbox-credential') || authHeader.includes('Bearer sand_')
+  return authHeader.includes('sandbox-credential') || authHeader.includes('Bearer sand_');
 }
 
 export function formatWwwAuthenticate(challenge: SandboxChallenge): string {
-  return `Payment method="mpp", challenge="${challenge.challengeId}", amount="${challenge.amount}", currency="${challenge.currency}", methods="${challenge.methods.join(',')}"`
+  return `Payment method="mpp", challenge="${challenge.challengeId}", amount="${challenge.amount}", currency="${challenge.currency}", methods="${challenge.methods.join(',')}"`;
 }
