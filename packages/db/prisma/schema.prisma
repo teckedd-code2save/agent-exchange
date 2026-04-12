@@ -31,6 +31,7 @@ enum PaymentType {
   stripe
   lightning
   sandbox // For testing without real rails
+  x402    // USDC on Base (testnet: base-sepolia, mainnet: base) via EIP-712 + CDP facilitator
 }
 
 enum CallerType {

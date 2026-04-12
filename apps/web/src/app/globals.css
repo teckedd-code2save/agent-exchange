@@ -1,3 +1,150 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Base ───────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background-color: #06060F;
+    color: #CDD5E8;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar       { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #09091A; }
+  ::-webkit-scrollbar-thumb { background: #1A1A35; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2A2A55; }
+
+  /* Selection */
+  ::selection { background: rgba(0,82,255,0.35); color: #fff; }
+}
+
+/* ── Component helpers ──────────────────────────────────────── */
+@layer components {
+  /* Glowing gradient border card */
+  .card-glow {
+    background: linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+    border: 1px solid rgba(255,255,255,0.07);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .card-glow:hover {
+    border-color: rgba(0,82,255,0.3);
+    box-shadow: 0 0 0 1px rgba(0,82,255,0.15), 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  /* Dot-grid hero overlay */
+  .dot-grid {
+    background-image: radial-gradient(rgba(255,255,255,0.055) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* Gradient text */
+  .text-brand-gradient {
+    background: linear-gradient(135deg, #4D87FF 0%, #22D3EE 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-white-gradient {
+    background: linear-gradient(160deg, #FFFFFF 30%, rgba(255,255,255,0.55) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Gradient border button */
+  .btn-brand {
+    background: #0052FF;
+    color: #ffffff;
+    font-weight: 600;
+    border-radius: 9999px;
+    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+  }
+  .btn-brand:hover {
+    background: #1A66FF;
+    box-shadow: 0 0 28px rgba(0,82,255,0.45);
+    transform: translateY(-1px);
+  }
+  .btn-brand:active { transform: translateY(0); }
+
+  .btn-outline {
+    background: transparent;
+    color: #CDD5E8;
+    border: 1px solid rgba(255,255,255,0.12);
+    font-weight: 600;
+    border-radius: 9999px;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+  .btn-outline:hover {
+    border-color: rgba(0,82,255,0.5);
+    background: rgba(0,82,255,0.08);
+    color: #ffffff;
+  }
+
+  /* Code block */
+  .code-block {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: #a5b4fc;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+  }
+
+  /* Status pill */
+  .pill-sandbox  { background: rgba(59,130,246,0.12); color: #93C5FD; border: 1px solid rgba(59,130,246,0.2); }
+  .pill-testnet  { background: rgba(245,158,11,0.12); color: #FCD34D; border: 1px solid rgba(245,158,11,0.2); }
+  .pill-live     { background: rgba(16,185,129,0.12); color: #6EE7B7; border: 1px solid rgba(16,185,129,0.2); }
+  .pill-draft    { background: rgba(107,114,128,0.12); color: #9CA3AF; border: 1px solid rgba(107,114,128,0.2); }
+  .pill-paused   { background: rgba(239,68,68,0.12);  color: #FCA5A5; border: 1px solid rgba(239,68,68,0.2); }
+}
+
+/* ── Utilities ──────────────────────────────────────────────── */
+@layer utilities {
+  .glow-brand { box-shadow: 0 0 40px rgba(0,82,255,0.28); }
+  .glow-cyan  { box-shadow: 0 0 40px rgba(34,211,238,0.22); }
+  .glow-sm    { box-shadow: 0 0 16px rgba(0,82,255,0.3); }
+
+  .border-dim    { border-color: rgba(255,255,255,0.06); }
+  .border-subtle { border-color: rgba(255,255,255,0.10); }
+  .border-brand  { border-color: rgba(0,82,255,0.35); }
+
+  /* Ticker container — hides overflow, full-width strip */
+  .ticker-wrap {
+    overflow: hidden;
+    white-space: nowrap;
+    mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+  }
+  .ticker-track {
+    display: inline-flex;
+    gap: 0;
+    animation: ticker 45s linear infinite;
+  }
+  .ticker-track:hover { animation-play-state: paused; }
+
+  /* Hero gradient overlay */
+  .hero-gradient {
+    background:
+      radial-gradient(ellipse 80% 55% at 50% -5%, rgba(0,82,255,0.20) 0%, transparent 65%),
+      radial-gradient(ellipse 45% 35% at 90% 85%, rgba(34,211,238,0.09) 0%, transparent 55%),
+      #06060F;
+  }
+
+  /* Nav blur */
+  .nav-blur {
+    background: rgba(6,6,15,0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
