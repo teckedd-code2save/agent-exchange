@@ -19,10 +19,10 @@ export function NavLink({
   return (
     <Link
       href={href}
-      className={`px-3 py-2 rounded-md text-sm transition-colors ${
+      className={`flex items-center gap-0.5 rounded-lg px-2 py-1.5 text-sm transition-all ${
         isActive
-          ? 'bg-indigo-600/20 text-indigo-300 font-medium'
-          : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+          ? 'bg-brand-500/15 text-brand-300 font-medium shadow-[inset_0_0_0_1px_rgba(0,82,255,0.2)]'
+          : 'text-ink-secondary hover:bg-white/5 hover:text-ink-primary'
       }`}
     >
       {children}
