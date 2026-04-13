@@ -42,6 +42,8 @@ export interface DiscoveryServiceRecord {
   description: string;
   tags: string[];
   studioSlug: string;
+  status: 'draft' | 'sandbox' | 'testnet' | 'live' | 'paused';
+  supportedPayments: string[];
   totalCalls: number;
   pricingConfig: {
     amount?: string;

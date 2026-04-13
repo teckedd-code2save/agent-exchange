@@ -14,7 +14,7 @@ async function getServices() {
   }
 }
 
-const ENV_LABELS: Record<string, { label: string; pill: string }> = {
+const ENV_LABELS: Record<string, { label: string; pill: string } | undefined> = {
   live:    { label: 'Live',    pill: 'pill-live' },
   testnet: { label: 'Testnet', pill: 'pill-testnet' },
   sandbox: { label: 'Sandbox', pill: 'pill-sandbox' },
@@ -127,7 +127,7 @@ export default async function MarketplacePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 {results.map((service: DiscoveryServiceRecord) => {
                   const pricing = (service.pricingConfig ?? {}) as { amount?: string; currency?: string };
-                  const envInfo = ENV_LABELS[service.status] ?? ENV_LABELS.sandbox;
+                  const envInfo = ENV_LABELS[service.status] ?? { label: 'Sandbox', pill: 'pill-sandbox' };
                   return (
                     <article
                       key={service.id}
