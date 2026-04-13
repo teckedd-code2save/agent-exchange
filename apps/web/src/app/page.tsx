@@ -371,7 +371,7 @@ export default function HomePage() {
               style={{ boxShadow: `0 0 40px ${q.glow}` }}
             >
               {/* Quote mark */}
-              <div className={`mb-4 text-4xl font-serif leading-none text-${q.color} opacity-60`}>"</div>
+              <div className={`mb-4 text-4xl font-serif leading-none text-${q.color} opacity-60`}>&ldquo;</div>
               <blockquote className="flex-1 text-sm leading-7 text-ink-primary italic">
                 {q.text}
               </blockquote>
