@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { prisma } from "@agent-exchange/db";
+import type { HonoVariables } from "../types.js";
 
-export const admin = new Hono();
+export const admin = new Hono<{ Variables: HonoVariables }>();
 
 // Simple admin key guard — replace with proper RBAC when ready
 admin.use("*", async (c, next) => {

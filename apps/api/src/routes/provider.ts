@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import { Prisma } from "@agent-exchange/db";
 import { prisma } from "@agent-exchange/db";
 import { authMiddleware } from "../middleware/auth.js";
+import type { HonoVariables } from "../types.js";
 
-export const provider = new Hono();
+export const provider = new Hono<{ Variables: HonoVariables }>();
 provider.use("*", authMiddleware);
 
 // GET /api/v1/provider/analytics
@@ -193,7 +195,7 @@ provider.post("/services", async (c) => {
       status: "sandbox",
       pricingType: (body.pricingType as any) ?? "fixed",
       pricingConfig: pricingConfig ?? { amount: "0.01", currency: "USDC" },
-      endpoints: body.endpoints ?? null,
+      endpoints: body.endpoints !== undefined ? (body.endpoints as Prisma.InputJsonValue) : Prisma.JsonNull,
       supportedPayments: (body.supportedPayments as any) ?? ["sandbox"],
       mppChallengeEndpoint: body.mppChallengeEndpoint ?? null,
       providerId: dbProvider.id,

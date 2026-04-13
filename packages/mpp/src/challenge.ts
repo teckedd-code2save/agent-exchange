@@ -109,7 +109,7 @@ export async function issueChallenge(params: IssueChallengeParams): Promise<Chal
   let x402Details: X402PaymentDetails | undefined;
   if (paymentMethods.includes('x402') && process.env['X402_PAY_TO_ADDRESS']) {
     try {
-      const { buildX402Details } = await import('./x402');
+      const { buildX402Details } = await import('./x402.js');
       x402Details = buildX402Details(
         amount,
         process.env['X402_PAY_TO_ADDRESS'],

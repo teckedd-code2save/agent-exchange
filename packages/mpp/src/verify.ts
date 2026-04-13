@@ -116,7 +116,7 @@ async function verifyX402Proof(proof: string, amount: string): Promise<boolean> 
     return false;
   }
   try {
-    const { buildX402Details, verifyX402Payment } = await import('./x402');
+    const { buildX402Details, verifyX402Payment } = await import('./x402.js');
     const requirements = buildX402Details(
       amount,
       payTo,

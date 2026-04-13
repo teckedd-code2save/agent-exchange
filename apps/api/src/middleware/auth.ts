@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Context, Next } from "hono";
+import type { HonoVariables } from "../types.js";
 
-export async function authMiddleware(c: Context, next: Next) {
+export async function authMiddleware(c: Context<{ Variables: HonoVariables }>, next: Next) {
   if (process.env["AUTH_BYPASS"] === "true") {
     c.set("userId", "dev-bypass-user");
     c.set("email", "dev@localhost");
