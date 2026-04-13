@@ -11,21 +11,36 @@ importers:
 
   .:
     devDependencies:
+      '@prisma/adapter-pg':
+        specifier: ^7.0.0
+        version: 7.5.0
+      '@prisma/client':
+        specifier: ^7.0.0
+        version: 7.5.0(prisma@7.5.0(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(typescript@5.9.3)
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.37
+      '@types/pg':
+        specifier: 8.20.0
+        version: 8.20.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^7.0.0
         version: 7.18.0(@typescript-eslint/parser@7.2.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)
       '@typescript-eslint/parser':
         specifier: ^7.0.0
         version: 7.2.0(eslint@8.57.1)(typescript@5.9.3)
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
       eslint:
         specifier: ^8.57.0
         version: 8.57.1
       eslint-config-prettier:
         specifier: ^9.1.0
         version: 9.1.2(eslint@8.57.1)
+      pg:
+        specifier: ^8.13.0
+        version: 8.20.0
       prettier:
         specifier: ^3.2.5
         version: 3.8.1
